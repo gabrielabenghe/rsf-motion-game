@@ -1,0 +1,344 @@
+% RSF 2026 — Lucrare de cercetare
+\documentclass[12pt, a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[romanian]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{amsmath, amssymb}
+\usepackage{enumitem}
+\usepackage[style=apa, backend=biber, sorting=nyt]{biblatex}
+\usepackage{csquotes}
+
+\onehalfspacing
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=blue!60!black,urlcolor=blue!60!black}
+\captionsetup{font=small, labelfont=bf}
+\addbibresource{references.bib}
+
+\newcommand{\titlulProiectului}{YR Motion Game: controlul unui joc video prin mișcări corporale recunoscute în timp real}
+\newcommand{\numeElevi}{Gabriela Benghe, clasa a XI-a A}
+\newcommand{\numeMentor}{[de completat]}
+\newcommand{\institutie}{Colegiul Național „Ion C. Brătianu”, Pitești}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\Large\textsc{Romanian Science Festival 2026}}\\[0.3cm]
+{\small Program de Cercetare pentru Elevi}\\[2.5cm]
+{\LARGE\bfseries \titlulProiectului}\\[2cm]
+{\large \numeElevi}\\[0.5cm]
+{\normalsize Mentor: \numeMentor}\\[0.3cm]
+{\normalsize \institutie}\\[3cm]
+\vfill
+{\normalsize Pitești, septembrie 2026}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Introducere}
+
+În majoritatea jocurilor video, intenția jucătorului este transmisă prin apăsarea
+unui buton. Într-un joc bazat pe mișcare, corpul devine dispozitivul de control, iar
+o acțiune fizică produce un rezultat vizibil în lumea virtuală. Legătura este ușor de
+urmărit chiar și de cineva care vede jocul pentru prima dată: un braț întins poate
+lansa un proiectil, iar o coborâre a corpului poate evita un atac.
+
+Ideea folosirii unei camere obișnuite pentru jocuri corporale există de peste două
+decenii. Proiectul \textit{Shadow Boxer} a demonstrat încă din 2004 că mișcarea unei
+persoane poate controla un joc prin intermediul unei camere web
+\parencite{hoysniemi2004}. Între timp, tehnologia de estimare a posturii a progresat.
+BlazePose a fost proiectat pentru urmărirea corpului în timp real pe dispozitive
+obișnuite și produce 33 de repere anatomice \parencite{bazarevsky2020}. MediaPipe
+Pose Landmarker pune la dispoziție aceleași tipuri de repere în coordonate de imagine
+și coordonate spațiale \parencite{googlepose2026}.
+
+Localizarea corpului nu rezolvă automat problema interacțiunii. Oamenii nu execută
+două mișcări în exact același mod. Unghiul brațului, poziția cotului, viteza și
+distanța față de cameră variază. Un detector prea strict respinge mișcări pe care un
+observator le consideră corecte, iar unul prea permisiv poate transforma postura
+relaxată într-o comandă. Cercetarea recomandă acceptarea variației firești a corpului
+și evitarea preciziei care nu aduce un beneficiu real experienței
+\parencite{isbister2015}. O analiză sistematică a literaturii a identificat 107
+recomandări pentru proiectarea jocurilor corporale, grupate în teme precum alegerea
+mișcărilor, feedbackul, siguranța și accesibilitatea \parencite{subramanian2020}.
+
+YR Motion Game investighează problema într-un caz concret. Este un joc de luptă care
+rulează în browser și folosește patru comenzi corporale:
+
+\begin{itemize}[nosep]
+    \item \textbf{ATAC}: brațul drept este întins lateral;
+    \item \textbf{BLOCARE}: antebrațele sunt ridicate și încrucișate la piept;
+    \item \textbf{ESCHIVĂ}: partea superioară a corpului coboară;
+    \item \textbf{SPECIALĂ}: ambele brațe sunt ridicate.
+\end{itemize}
+
+Sistemul nu solicită înregistrarea unor exemple personale și nu compară utilizatorul
+cu o postură perfectă. MediaPipe furnizează reperele anatomice, iar un detector
+geometric transparent decide ce comandă descriu acestea.
+
+\section{Obiective și Întrebarea de Cercetare}
+
+\textbf{Obiectivul general} este dezvoltarea unui sistem web capabil să transforme
+patru mișcări corporale distincte în acțiuni de joc clare, rapide și independente,
+pe cât posibil, de distanța utilizatorului față de cameră.
+
+\textbf{Obiectivele specifice} sunt:
+
+\begin{enumerate}[nosep]
+    \item definirea unui detector geometric explicabil, care să accepte variații
+    naturale ale aceleiași mișcări;
+    \item reducerea dependenței de distanța față de cameră prin normalizarea
+    distanțelor cu lățimea umerilor;
+    \item realizarea unui flux în care o postură menținută produce o singură comandă,
+    iar feedbackul apare numai pentru acțiunile acceptate de joc;
+    \item menținerea unei latențe reduse prin evitarea acumulării cadrelor video vechi.
+\end{enumerate}
+
+\textbf{Întrebarea de cercetare:} \textit{În ce măsură poate un detector geometric
+normalizat la proporțiile corpului să transforme patru posturi aproximative în
+comenzi distincte și coerente pentru un joc video în timp real?}
+
+Ipoteza tehnică este că raportarea distanțelor la lățimea umerilor păstrează decizia
+detectorului la o redimensionare uniformă a corpului, iar folosirea unei poziții
+neutre reduce activările false pentru BLOCARE și ESCHIVĂ.
+
+\section{Metodologie}
+
+\subsection{Tipul cercetării}
+
+Lucrarea reprezintă o cercetare aplicată de tip \textit{design și implementare de
+sistem}, însoțită de verificare software. A fost construit un prototip funcțional,
+apoi proprietățile sale au fost verificate prin cazuri sintetice și teste deterministe
+ale motorului de luptă. Nu a fost realizat încă un experiment controlat cu
+participanți; rezultatele descriu comportamentul programului, nu performanța sa
+statistică în populația generală.
+
+\subsection{Instrumente de colectare a datelor}
+
+Intrarea principală este fluxul unei camere web solicitat la rezoluția ideală de
+$640\times480$ pixeli și aproximativ 30 de cadre pe secundă. MediaPipe Pose
+Landmarker identifică reperele corpului. Dintre cele 33 disponibile sunt folosite
+numai nasul, umerii, coatele și încheieturile. Urmărirea degetelor nu este necesară.
+
+În modul de dezvoltare, aplicația afișează valorile geometrice, gestul brut,
+evenimentul emis și acțiunea acceptată. Sunt urmărite și frecvența camerei, durata
+inferenței, cadrele omise și tipul de procesare, GPU sau CPU. Panoul este actualizat
+de aproximativ patru ori pe secundă, pentru a nu redesena întreaga interfață la
+fiecare cadru.
+
+\subsection{Eșantion / Materiale}
+
+Nu există un eșantion uman în etapa documentată. Materialul de verificare este format
+din schelete sintetice cu 33 de puncte, construite pentru a reprezenta posturi
+cunoscute. Cazurile pozitive trebuie să producă una dintre cele patru comenzi, iar
+cazurile negative includ poziția neutră, brațul drept lăsat în jos și un singur braț
+ridicat.
+
+Pentru testarea invarianței la scară, toate punctele unei posturi sunt apropiate de
+centrul corpului cu factorul $0{,}6$. Postura rezultată simulează aceeași persoană
+aflată la o distanță mai mare de cameră.
+
+\subsection{Normalizarea geometrică}
+
+Notăm cu $U_S$ și $U_D$ umerii stâng și drept. Centrul umerilor $C$ și lățimea
+umerilor $s$ sunt:
+
+\begin{align}
+C_x &= \frac{U_{Sx}+U_{Dx}}{2}, &
+C_y &= \frac{U_{Sy}+U_{Dy}}{2}, \\
+s &= \sqrt{(U_{Sx}-U_{Dx})^2+(U_{Sy}-U_{Dy})^2}.
+\end{align}
+
+Toate distanțele folosite sunt împărțite la $s$ sau la lățimea umerilor din poziția
+neutră, $s_0$. La o scalare uniformă cu factorul $k$, atât distanța măsurată, cât și
+lățimea umerilor sunt înmulțite cu $k$, iar raportul rămâne neschimbat. Reperele sunt
+acceptate la o vizibilitate de minimum $0{,}20$. Dacă unul dispare foarte scurt,
+ultima postură completă poate fi folosită cel mult 160 ms.
+
+\subsection{Poziția neutră}
+
+La început sunt colectate minimum opt cadre valide pe o perioadă de cel puțin 800 ms.
+Se calculează medianele pentru centrul și lățimea umerilor, nas, coate și
+încheieturi. Referința este apoi înghețată, astfel încât să nu urmeze utilizatorul în
+timpul eschivei.
+
+\subsection{Regulile de recunoaștere}
+
+Ordinea de verificare este SPECIALĂ, BLOCARE, ESCHIVĂ, ATAC.
+
+\textbf{SPECIALĂ.} Ridicarea fiecărei încheieturi față de umărul corespunzător,
+împărțită la $s$, trebuie să depășească $-0{,}05$. Toleranța permite coate îndoite și
+încheieturi foarte puțin sub umeri.
+
+\textbf{BLOCARE.} Încheieturile trebuie să fie în zona superioară a trunchiului,
+ambele brațe trebuie ridicate față de neutru, iar antebrațele trebuie orientate spre
+centru. Încheieturile trebuie să fie la mai puțin de o lățime de umeri una de alta
+sau să indice o încrucișare. Corpul rămâne aproximativ drept.
+
+\textbf{ESCHIVĂ.} Cu $C_{y0}$, $N_{y0}$ și $s_0$ din poziția neutră:
+
+\begin{align}
+d_{umeri} &= \frac{C_y-C_{y0}}{s_0}, &
+d_{nas} &= \frac{N_y-N_{y0}}{s_0}.
+\end{align}
+
+Eschiva este detectată când $d_{umeri}>0{,}25$ sau $d_{nas}>0{,}28$. Poziția
+brațelor nu influențează rezultatul.
+
+\textbf{ATAC.} Sunt folosite umărul și încheietura brațului drept anatomic:
+
+\begin{align}
+e_x &= \frac{|M_{Dx}-U_{Dx}|}{s}, &
+e_y &= \frac{|M_{Dy}-U_{Dy}|}{s}, \\
+\alpha &= \operatorname{atan2}(|M_{Dy}-U_{Dy}|,|M_{Dx}-U_{Dx}|).
+\end{align}
+
+Atacul este detectat dacă $e_x>0{,}65$, $e_y<0{,}60$ și $\alpha<40^\circ$.
+Valoarea absolută face regula independentă de oglindirea imaginii.
+
+\subsection{Emiterea și acceptarea acțiunii}
+
+Gestul trebuie să rămână stabil 100 ms pentru a emite un singur eveniment. Cât timp
+postura este menținută, nu se emit altele. Detectorul se reactivează după ce gestul
+lipsește 200 ms.
+
+Evenimentul este evaluat de motorul de luptă. Numai o acțiune acceptată poate porni
+animația, crea un proiectil, activa apărarea, afișa eticheta și intra în istoricul
+reușitelor. Gestul SPECIALĂ executat înainte ca energia să ajungă la 100\% este
+recunoscut, dar nu produce atacul special.
+
+\subsection{Controlul latenței}
+
+Pose Landmarker rulează cel mult o dată la 33 ms. Același timp video nu este procesat
+de două ori. Dacă o inferență este activă, cadrul următor este omis, nu adăugat într-o
+coadă. Aplicația folosește \texttt{requestVideoFrameCallback} atunci când este
+disponibil și \texttt{requestAnimationFrame} ca rezervă. Inițializarea încearcă
+procesarea GPU și revine la CPU în caz de eșec.
+
+\section{Rezultate și Discuții}
+
+\subsection{Rezultate}
+
+Detectorul de producție a fost verificat cu posturi sintetice. Tabelul
+\ref{tab:gesturi} prezintă principalele cazuri confirmate de funcțiile de test.
+
+\begin{table}[H]
+    \centering
+    \caption{Cazuri de verificare pentru detectorul geometric}
+    \label{tab:gesturi}
+    \begin{tabular}{p{0.49\textwidth}p{0.23\textwidth}p{0.16\textwidth}}
+        \toprule
+        \textbf{Caz testat} & \textbf{Rezultat} & \textbf{Verificat} \\
+        \midrule
+        Ambele brațe ridicate & SPECIALĂ & Da \\
+        Antebrațe în X la piept & BLOCARE & Da \\
+        Corp coborât față de neutru & ESCHIVĂ & Da \\
+        Braț drept întins lateral & ATAC & Da \\
+        Același atac redimensionat la 60\% & ATAC & Da \\
+        Același X redimensionat la 60\% & BLOCARE & Da \\
+        Braț drept lateral în sens opus pe axa $x$ & ATAC & Da \\
+        Poziții neutre simetrice și asimetrice & Nicio comandă & Da \\
+        Braț drept în jos sau vertical & Nu ATAC & Da \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Testele temporale confirmă că o postură menținută produce un singur eveniment, iar
+revenirea la neutru urmată de repetare produce un eveniment nou. Motorul de luptă a
+fost verificat separat. Fiecare proiectil poate produce cel mult un impact. La
+contactul unui proiectil advers, ordinea este ESCHIVĂ, BLOCARE, apoi daună normală.
+O eschivă activă produce zero daune. O blocare activă creează un proiectil reflectat,
+iar adversarul primește daune numai la sosirea acestuia. O apărare expirată nu oferă
+imunitate.
+
+\begin{table}[H]
+    \centering
+    \caption{Configurația principală a luptei}
+    \label{tab:config}
+    \begin{tabular}{lc}
+        \toprule
+        \textbf{Parametru} & \textbf{Valoare} \\
+        \midrule
+        Viața jucătorului & 100 \\
+        Viața adversarilor & 90 / 115 / 105 / 135 \\
+        Daună ATAC & 15 \\
+        Daună SPECIALĂ & 30 \\
+        Daună reflectată & 12 \\
+        Dauna adversarilor & 10 / 12 / 14 / 16 \\
+        Interval atac advers & 900--2400 ms \\
+        Probabilitate eschivă adversar & 0,25 \\
+        Pauză între eschivele adversarului & 1800 ms \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+În etapele avansate, adversarul estimează următoarea comandă folosind frecvența
+acțiunilor acceptate și tranzițiile observate. Mecanismul folosește numai istoricul,
+nu gestul aflat în curs. Ideea este compatibilă cu cercetarea despre adaptarea
+jocurilor pe baza modelelor de jucător \parencite{yannakakis2009,cowley2016}, dar
+implementarea proiectului este intenționat simplă și explicabilă.
+
+\subsection{Discuții}
+
+Rezultatele susțin ipoteza tehnică într-un sens limitat: pentru cazurile sintetice,
+redimensionarea uniformă nu schimbă decizia. Explicația este dată de raportarea la
+lățimea umerilor, mai robustă decât o distanță brută în pixeli.
+
+Poziția neutră rezolvă o ambiguitate importantă. Apropierea mâinilor de trunchi nu
+este suficientă pentru identificarea unei blocări, deoarece poate apărea și în repaus.
+Compararea ambelor brațe cu referința neutră și verificarea orientării antebrațelor
+fac diferența dintre o gardă activă și o postură relaxată.
+
+Arhitectura separă gestul brut, evenimentul emis și acțiunea acceptată. Separarea
+previne un feedback înșelător. Dacă energia specială nu este completă, gestul poate
+fi corect, dar personajul nu execută atacul și eticheta de succes nu apare.
+
+Abordarea are limite. Scalarea uniformă nu reproduce rotația corpului, scurtarea
+aparentă a unui braț orientat spre cameră, ocluzia, lumina slabă sau îmbrăcămintea
+largă. Testele sintetice demonstrează proprietăți ale formulelor, nu o rată de
+recunoaștere pentru populația generală. Nici performanța nu a fost încă măsurată
+controlat pe mai multe dispozitive.
+
+O evaluare viitoare ar trebui să includă persoane cu proporții corporale și
+experiențe de joc diferite. Fiecare gest ar fi repetat la două distanțe marcate.
+Rezultatele ar trebui raportate separat prin precizie, sensibilitate, scor F1 și
+matrice de confuzie. Latența ar trebui descrisă prin mediană și percentila 95, deoarece
+o medie poate ascunde întârzierile rare, dar deranjante. Utilizabilitatea poate fi
+măsurată separat prin observație și System Usability Scale \parencite{brooke1996}.
+
+\section{Concluzii}
+
+Întrebarea de cercetare a primit un răspuns tehnic preliminar: detectorul geometric
+normalizat separă cele patru posturi în cazurile de test și își păstrează decizia la
+redimensionarea uniformă a coordonatelor. Rezultatul nu dovedește aceeași performanță
+pentru toate persoanele și toate condițiile de filmare.
+
+Contribuția principală este integrarea coerentă a reperelor MediaPipe, normalizării
+prin lățimea umerilor, poziției neutre, filtrării temporale și acceptării acțiunii de
+către motor. Împreună, aceste mecanisme transformă postura într-o comandă stabilă și
+într-o reacție vizuală care corespunde logicii luptei.
+
+Direcția imediată de cercetare este evaluarea cu utilizatori reali. Aceasta trebuie să
+măsoare separat fiecare gest, activările false în poziție neutră, efectul distanței,
+latența și claritatea interacțiunii. Pragurile pot fi apoi ajustate pe baza datelor,
+fără a pierde transparența detectorului.
+
+\newpage
+\printbibliography[title={Referințe Bibliografice}]
+
+\end{document}

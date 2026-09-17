@@ -1,0 +1,491 @@
+@import "tailwindcss";
+
+:root { --background: #020617; --foreground: #f8fafc; }
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
+button { cursor: pointer; }
+.title-screen {
+  position: relative; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 70%, #12304a 0, #07101d 42%, #02040a 100%);
+}
+.title-screen::before, .title-screen::after {
+  content: ""; position: absolute; inset: 12% 8%; pointer-events: none;
+  border: 1px solid rgb(34 211 238 / .18); transform: skewX(-8deg);
+}
+.title-screen::after { inset: 18% 14%; border-color: rgb(236 72 153 / .12); transform: skewX(8deg); }
+.title-mark { letter-spacing: .16em; text-shadow: 0 0 28px rgb(34 211 238 / .45), 5px 5px 0 #0f172a; }
+.game-button, .game-button-secondary { position: relative; clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%); transition: transform .15s ease, filter .15s ease; }
+.game-button:hover, .game-button-secondary:hover { transform: translateY(-2px); filter: brightness(1.15); }
+.game-button-secondary { border: 1px solid #64748b; color: #cbd5e1; background: #0f172a; }
+
+.battle-cabinet {
+  overflow: hidden;
+  border: 2px solid #334155;
+  border-radius: 18px;
+  background: #080d1a;
+  box-shadow: 0 18px 60px rgb(0 0 0 / .5), inset 0 0 35px rgb(34 211 238 / .06);
+}
+.battle-hud { padding: 14px 18px 10px; background: linear-gradient(#182131,#070b14 72%); border-bottom: 1px solid #475569; box-shadow:inset 0 -8px 18px rgb(0 0 0 / .35); }
+.health-shell { position:relative; height:22px; overflow:hidden; border:3px solid #cbd5e1; border-radius:4px 12px 12px 4px; background:#3f0b14; box-shadow:inset 0 0 8px #000,0 2px 0 #020617,0 0 8px rgb(148 163 184 / .18); transform:skewX(-8deg); }
+.health-right { border-radius:12px 4px 4px 12px; transform:skewX(8deg); }
+.health-memory,.health-fill { position:absolute; inset-block:0; left:0; }
+.health-memory { z-index:1; background:linear-gradient(90deg,#fef08a,#f59e0b); transition:width .22s cubic-bezier(.25,.8,.25,1); }
+.health-fill { z-index:2; height:100%; background:linear-gradient(90deg,#15803d,#bef264 62%,#f7fee7); box-shadow:inset 0 -5px 0 rgb(0 0 0 / .2),inset 0 3px 0 rgb(255 255 255 / .22); transition:width .12s cubic-bezier(.2,.8,.2,1); }
+.health-shell::after { content:""; position:absolute; z-index:3; inset:2px 5px auto; height:3px; border-radius:50%; background:linear-gradient(90deg,transparent,rgb(255 255 255 / .5),transparent); pointer-events:none; }
+.health-right .health-memory,.health-right .health-fill { left:auto; right:0; }
+.health-right .health-fill { background:linear-gradient(90deg,#f7fee7,#bef264 38%,#15803d); }
+.health-fill.health-danger { background:linear-gradient(90deg,#dc2626,#fb923c); animation:warning .5s infinite alternate; }
+.health-low .health-shell { border-color:#fecaca; box-shadow:inset 0 0 8px #000,0 0 10px rgb(239 68 68 / .25); animation:health-danger-pulse .8s ease-in-out infinite alternate; }
+.battle-arena {
+  isolation: isolate;
+  margin-inline: 10px;
+  border: 1px solid #475569;
+  background: linear-gradient(#111d42 0 58%, #162336 58% 66%, #07111e 66%);
+  box-shadow: inset 0 0 55px rgb(0 0 0 / .55);
+}
+.arena-2 { background: linear-gradient(#401d29 0 58%, #342021 58% 66%, #12090d 66%); }
+.arena-3 { background: linear-gradient(#1f1648 0 58%, #241a39 58% 66%, #090613 66%); }
+.arena-4 { background: linear-gradient(#250f35 0 58%, #171129 58% 66%, #08050d 66%); }
+.arena-moon {
+  position: absolute; top: 42px; left: 50%; width: 108px; height: 108px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff, #67e8f9 32%, #155e75 66%, transparent 68%);
+  opacity: .45; box-shadow: 0 0 70px #22d3ee; transform: translateX(-50%);
+}
+.arena-depth-far { position:absolute; z-index:-3; inset:8% 5% 35%; opacity:.38; background:repeating-linear-gradient(90deg,transparent 0 8%,rgb(148 163 184 / .16) 8% 8.5%,transparent 8.5% 16%); transform:perspective(500px) rotateX(-4deg); }
+.arena-rigging { position:absolute; z-index:-2; inset:5px 4% auto; height:72px; border-top:5px solid #111827; border-inline:4px solid #1e293b; opacity:.72; }
+.arena-rigging::before,.arena-rigging::after { content:""; position:absolute; inset:12px 0 auto; height:3px; background:#334155; transform:rotate(4deg); transform-origin:left; }
+.arena-rigging::after { transform:rotate(-4deg);transform-origin:right; }
+.arena-rigging i { position:absolute; top:5px; width:32px; height:14px; border:3px solid #263746; background:#0b111a; clip-path:polygon(10% 0,90% 0,100% 100%,0 100%); }
+.arena-rigging i:nth-child(1){left:11%}.arena-rigging i:nth-child(2){left:48%}.arena-rigging i:nth-child(3){right:10%}
+.arena-crowd { position:absolute; z-index:-1; left:4%; right:4%; bottom:31%; height:75px; opacity:.42; display:flex; align-items:end; justify-content:space-around; filter:saturate(.55); }
+.arena-crowd i { width:42px; height:58px; background:linear-gradient(#172033 0 28%,#0b111b 29%); border-radius:45% 45% 8% 8%; clip-path:polygon(30% 0,70% 0,78% 22%,100% 38%,90% 100%,10% 100%,0 38%,22% 22%); animation:crowd-shift 3.8s ease-in-out infinite alternate; }
+.arena-crowd i:nth-child(2n){height:49px;animation-delay:-1.5s}.arena-crowd i:nth-child(3n){height:65px;animation-delay:-2.4s}
+.arena-banners { position:absolute; z-index:0; left:7%; right:7%; top:25%; display:flex; justify-content:space-between; color:rgb(207 250 254 / .36); font-size:10px; font-weight:1000; letter-spacing:.25em; }
+.arena-banners i { padding:5px 10px; border:1px solid rgb(103 232 249 / .2); background:rgb(2 6 23 / .55); transform:skewX(-8deg); }
+.arena-haze { position:absolute; z-index:1; left:-10%; width:120%; height:90px; border-radius:50%; pointer-events:none; background:linear-gradient(90deg,transparent,rgb(148 163 184 / .08),rgb(34 211 238 / .08),transparent); opacity:.55; animation:haze-drift 9s ease-in-out infinite alternate; }
+.arena-haze-back { bottom:29%; }
+.arena-3 .arena-moon, .arena-4 .arena-moon { border-radius: 18% 55% 35% 60%; background: #a78bfa; box-shadow: 0 0 85px #8b5cf6; }
+.arena-skyline {
+  position: absolute; inset: auto 0 34% 0; height: 32%;
+  opacity: .7;
+  background:
+    linear-gradient(90deg, transparent 0 4%, #0b1221 4% 13%, transparent 13% 16%, #0b1221 16% 30%, transparent 30% 36%, #0b1221 36% 46%, transparent 46% 54%, #0b1221 54% 70%, transparent 70% 75%, #0b1221 75% 94%, transparent 94%);
+  clip-path: polygon(0 45%,8% 45%,8% 12%,15% 12%,15% 58%,25% 58%,25% 0,33% 0,33% 46%,45% 46%,45% 22%,58% 22%,58% 65%,69% 65%,69% 8%,80% 8%,80% 48%,90% 48%,90% 25%,100% 25%,100% 100%,0 100%);
+  animation:arena-parallax 12s ease-in-out infinite alternate;
+}
+.arena-lights { position: absolute; top: 18px; left: 10%; right: 10%; display: flex; justify-content: space-around; }
+.arena-lights i { width: 5px; height: 5px; border-radius: 50%; background: #67e8f9; box-shadow: 0 0 12px 4px #22d3ee; animation: arena-pulse 1.8s ease-in-out infinite alternate; }
+.arena-lights i:nth-child(even) { animation-delay: .5s; }
+.arena-platform {
+  position: absolute; z-index: -1; left: 3%; right: 3%; bottom: 36px; height: 72px;
+  border-top: 4px solid #64748b;
+  background: repeating-linear-gradient(100deg, #172033 0 32px, #111827 32px 64px);
+  transform: perspective(340px) rotateX(38deg);
+  box-shadow: 0 -12px 35px rgb(34 211 238 / .08);
+}
+.arena-foreground { position: absolute; inset: auto 0 0; height: 42px; background: linear-gradient(#111827, #020617); border-top: 2px solid #0f172a; }
+.arena-floor-sheen { position:absolute; z-index:1; left:12%; right:12%; bottom:35px; height:54px; background:radial-gradient(ellipse at center,rgb(103 232 249 / .13),transparent 66%); transform:perspective(300px) rotateX(48deg); pointer-events:none; }
+.arena-vignette { position:absolute; z-index:20; inset:0; pointer-events:none; box-shadow:inset 0 0 70px 18px rgb(0 0 0 / .55); }
+.arena-dust { position:absolute; z-index:2; inset:0; pointer-events:none; }
+.arena-dust i { position:absolute; width:3px; height:3px; border-radius:50%; background:rgb(226 232 240 / .38); opacity:0; animation:ambient-dust 6s linear infinite; }
+.arena-dust i:nth-child(1){left:9%;top:62%;animation-delay:-1s}.arena-dust i:nth-child(2){left:19%;top:36%;animation-delay:-4s}.arena-dust i:nth-child(3){left:34%;top:69%;animation-delay:-2.2s}.arena-dust i:nth-child(4){left:47%;top:43%;animation-delay:-5s}.arena-dust i:nth-child(5){left:61%;top:61%;animation-delay:-.5s}.arena-dust i:nth-child(6){left:73%;top:31%;animation-delay:-3s}.arena-dust i:nth-child(7){left:86%;top:67%;animation-delay:-4.8s}.arena-dust i:nth-child(8){left:92%;top:47%;animation-delay:-1.8s}
+.round-intro { position:absolute; z-index:30; inset:0; pointer-events:none; display:grid; place-items:center; font-style:italic; font-weight:1000; letter-spacing:.12em; text-shadow:0 4px 0 #020617,0 0 22px rgb(34 211 238 / .6); }
+.round-intro span,.round-intro b { position:absolute; opacity:0; }
+.round-intro span { color:#cbd5e1; font-size:clamp(28px,5vw,56px); animation:round-title .62s ease-out forwards; }
+.round-intro b { color:#f8fafc; font-size:clamp(42px,7vw,80px); animation:fight-title .55s cubic-bezier(.15,.8,.2,1) .58s forwards; }
+.combat-dust { position:absolute; z-index:8; bottom:42px; width:100px; height:40px; pointer-events:none; }
+.combat-dust-left{left:15%}.combat-dust-right{right:14%}
+.combat-dust i { position:absolute; left:45%; bottom:0; width:18px; height:8px; border-radius:50%; background:#94a3b8; opacity:0; animation:foot-dust .48s ease-out forwards; }
+.combat-dust i:nth-child(2){animation-delay:.04s;transform:translateX(15px)}.combat-dust i:nth-child(3){animation-delay:.08s;transform:translateX(-19px)}.combat-dust i:nth-child(4){animation-delay:.12s;transform:translateX(28px)}
+.finish-dust { position:absolute; z-index:10; bottom:35px; width:150px; height:55px; pointer-events:none; }
+.finish-dust-left{left:12%}.finish-dust-right{right:10%}
+.finish-dust i { position:absolute; left:48%; bottom:0; width:28px; height:12px; border-radius:50%; background:#94a3b8; opacity:0; animation:finish-dust .7s ease-out .2s forwards; }
+.finish-dust i:nth-child(2){transform:translateX(24px);animation-delay:.24s}.finish-dust i:nth-child(3){transform:translateX(-28px);animation-delay:.28s}.finish-dust i:nth-child(4){transform:translateX(46px);animation-delay:.32s}.finish-dust i:nth-child(5){transform:translateX(-48px);animation-delay:.36s}
+
+.fighter { position: relative; z-index: 4; width: 175px; text-align: center; transform-origin: bottom center; filter:drop-shadow(0 12px 8px rgb(0 0 0 / .65)) drop-shadow(0 0 1px rgb(103 232 249 / .55)); }
+.fighter-svg { display:block; width:185px; height:280px; overflow:visible; }
+.fighter-player .fighter-svg { transform:scale(1.05); transform-origin:bottom center; }
+.fighter-opponent .fighter-svg { transform:scaleX(-1) scale(1.02); transform-origin:bottom center; }
+.fighter-silhouette { transform:scale(1.05); transform-origin:bottom center; }
+.fighter-opponent .fighter-silhouette { transform:scale(1.06); }
+.energy-blaster { position:absolute; z-index:8; right:-39px; top:116px; width:70px; height:23px; transform:rotate(-7deg); background:#1e293b; border:3px solid #020617; clip-path:polygon(0 22%,68% 22%,78% 0,100% 0,100% 100%,78% 100%,68% 78%,0 78%); box-shadow:inset 0 0 0 2px #475569; }
+.blaster-chamber { position:absolute; left:24px; top:3px; width:18px; height:14px; background:#22d3ee; border:2px solid #cffafe; box-shadow:0 0 10px #22d3ee; }
+.blaster-barrel { position:absolute; right:-13px; top:6px; width:18px; height:8px; background:#64748b; border:2px solid #0f172a; }
+.blaster-muzzle { position:absolute; right:-17px; top:7px; width:5px; height:6px; background:#fff; box-shadow:0 0 8px #67e8f9; }
+.fighter-silhouette { position: relative; height: 280px; }
+.fighter-head { position: relative; width: 58px; height: 61px; margin: 0 auto; border: 4px solid #083344; border-radius: 48% 48% 42% 42%; background: linear-gradient(135deg,#f0b58e,#a855f7); box-shadow: inset -8px -5px 0 rgb(0 0 0 / .16); }
+.fighter-eye { position: absolute; top: 25px; width: 8px; height: 4px; border-radius: 99px; background: #f8fafc; box-shadow: 0 0 7px currentColor; }
+.fighter-eye-left { left: 12px; } .fighter-eye-right { right: 12px; }
+.fighter-crest { position: absolute; z-index: 2; top: -13px; left: 50%; width: 70px; height: 30px; background: #06b6d4; clip-path: polygon(0 100%,15% 20%,35% 75%,55% 0,68% 70%,100% 25%,88% 100%); transform: translateX(-50%); }
+.fighter-body { position: relative; width: 80px; height: 102px; margin: -2px auto 0; border: 5px solid #083344; border-radius: 20px 20px 12px 12px; background: linear-gradient(135deg,#0891b2,#164e63); }
+.fighter-core { position: absolute; top: 21px; left: 50%; width: 32px; height: 42px; border: 3px solid #67e8f9; clip-path: polygon(50% 0,100% 25%,84% 100%,16% 100%,0 25%); transform: translateX(-50%); }
+.fighter-arm { position: absolute; top: 7px; width: 23px; height: 92px; border: 4px solid #083344; border-radius: 99px; background: #0e7490; transform-origin: top center; }
+.fighter-arm i { position:absolute; bottom:-8px; left:-3px; width:22px; height:22px; border-radius:50%; background:#f0b58e; border:3px solid #083344; }
+.fighter-arm-left { left: -28px; transform: rotate(12deg); } .fighter-arm-right { right: -28px; transform: rotate(-12deg); }
+.fighter-legs { display: flex; justify-content: center; gap: 18px; margin-top: -2px; }
+.fighter-legs > span { position: relative; width: 27px; height: 86px; border: 4px solid #083344; border-radius: 10px 10px 5px 5px; background: #155e75; }
+.fighter-legs i { position:absolute; bottom:-7px; width:39px; height:15px; border-radius:12px 5px 4px; background:#0e7490; border:3px solid #083344; }
+.fighter-legs span:first-child i { right:0; } .fighter-legs span:last-child i { left:0; transform:scaleX(-1); }
+.fighter-name { position:absolute; left:50%; bottom:-23px; min-width:145px; transform:translateX(-50%); font-size:13px; font-weight:900; letter-spacing:.08em; text-shadow:0 2px 3px #000; }
+.fighter-aura { position:absolute; inset:15% -5% 5%; border-radius:50%; opacity:0; background:radial-gradient(ellipse,#22d3ee55,transparent 65%); }
+
+/* Every opponent has a different silhouette, not merely a palette swap. */
+.enemy-1 .fighter-silhouette { height: 205px; transform: scale(.82); transform-origin: bottom; }
+.enemy-1 .fighter-head { width:72px; height:70px; border-radius:55% 55% 40% 40%; background:#84cc16; border-color:#365314; }
+.enemy-1 .fighter-crest { width:8px; height:35px; border-radius:8px; background:#bef264; clip-path:none; }
+.enemy-1 .fighter-body { width:92px; height:78px; border-radius:45% 45% 22% 22%; background:#4d7c0f; border-color:#365314; }
+.enemy-1 .fighter-arm { height:65px; background:#65a30d; border-color:#365314; }
+.enemy-1 .fighter-legs > span { height:55px; background:#3f6212; border-color:#365314; }
+
+.enemy-2 .fighter-head { border-radius:8px 8px 45% 45%; background:#f97316; border-color:#431407; }
+.enemy-2 .fighter-crest { width:94px; height:35px; background:#fb923c; clip-path:polygon(0 90%,20% 0,38% 80%,62% 80%,80% 0,100% 90%); }
+.enemy-2 .fighter-body { width:105px; background:linear-gradient(90deg,#7c2d12,#ea580c,#7c2d12); border-color:#431407; clip-path:polygon(12% 0,88% 0,100% 80%,75% 100%,25% 100%,0 80%); }
+.enemy-2 .fighter-arm { width:29px; background:#9a3412; border-color:#431407; }
+.enemy-2 .fighter-legs > span { width:32px; background:#7c2d12; border-color:#431407; }
+
+.enemy-3 .fighter-head { width:76px; height:76px; border-radius:50%; background:radial-gradient(circle,#fef08a 0 10%,#c026d3 12% 38%,#581c87 40%); border-color:#3b0764; }
+.enemy-3 .fighter-eye-left { left:31px; top:32px; width:12px; height:12px; border-radius:50%; background:#fff; color:#fde047; }
+.enemy-3 .fighter-eye-right { display:none; }
+.enemy-3 .fighter-crest { width:110px; height:78px; top:-3px; background:#7e22ce; clip-path:polygon(50% 45%,0 0,25% 55%,3% 100%,42% 68%,50% 100%,58% 68%,97% 100%,75% 55%,100% 0); }
+.enemy-3 .fighter-body { border-radius:50% 50% 18% 18%; background:#6b21a8; border-color:#3b0764; }
+.enemy-3 .fighter-arm { height:105px; width:17px; background:#a21caf; border-color:#3b0764; }
+.enemy-3 .fighter-legs > span { width:18px; background:#581c87; border-color:#3b0764; transform:rotate(8deg); }
+
+.enemy-4 .fighter-silhouette { height:268px; }
+.enemy-4 .fighter-head { width:68px; height:72px; background:#111827; border-color:#e11d48; clip-path:polygon(10% 0,90% 0,100% 75%,50% 100%,0 75%); }
+.enemy-4 .fighter-crest { top:-20px; width:118px; height:65px; background:#f43f5e; clip-path:polygon(0 100%,18% 0,35% 70%,50% 8%,65% 70%,82% 0,100% 100%); }
+.enemy-4 .fighter-body { width:112px; height:116px; background:linear-gradient(135deg,#111827,#4c0519); border-color:#e11d48; clip-path:polygon(15% 0,85% 0,100% 32%,82% 100%,18% 100%,0 32%); }
+.enemy-4 .fighter-core { border-color:#fb7185; box-shadow:0 0 18px #e11d48; }
+.enemy-4 .fighter-arm { width:30px; height:112px; background:#4c0519; border-color:#e11d48; }
+.enemy-4 .fighter-legs > span { height:92px; width:32px; background:#1f2937; border-color:#e11d48; }
+
+.player-head-svg,.player-torso-svg,.player-arm-left-svg,.player-arm-right-svg,.player-hips-svg,.player-leg-left-svg,.player-leg-right-svg,.blaster-svg { transform-box:fill-box; transition:transform .18s ease-out; }
+.fighter-attack .player-arm-right-svg,.fighter-attack .blaster-svg { transform:translate(12px,-10px) rotate(-9deg); transform-origin:left center; }
+.fighter-attack .blaster-svg { filter:brightness(2); }
+.fighter-special { animation:fighter-special .6s cubic-bezier(.2,.75,.25,1); }
+.fighter-special .fighter-aura { opacity:1; border:5px solid #e879f9; background:radial-gradient(ellipse,#d946ef88,transparent 68%); animation:special-charge .6s ease-out; }
+.fighter-block .fighter-aura { opacity:1; border:5px solid #67e8f9; animation:shield-pulse .5s ease-out; }
+.fighter-block .player-arm-left-svg { transform:translate(37px,-19px) rotate(-31deg); transform-origin:center; }
+.fighter-block .player-arm-right-svg { transform:translate(-35px,-16px) rotate(32deg); transform-origin:center; }
+.fighter-block .fighter-arm-left { transform:rotate(-48deg) translate(20px,-10px); }
+.fighter-block .fighter-arm-right { transform:rotate(48deg) translate(-20px,-10px); }
+.fighter-reflect .player-arm-left-svg { animation:block-throw-left .7s ease-out; }
+.fighter-reflect .player-arm-right-svg { animation:block-throw-right .7s ease-out; }
+.fighter-reflect .fighter-aura { opacity:1; border:7px solid white; box-shadow:0 0 32px #22d3ee; }
+.fighter-dodge .fighter-silhouette { transform:translateY(74px) scale(1.2,.72); transition:transform .15s ease-out; }
+.fighter-dodge .player-head-svg { transform:translateY(35px); }
+.fighter-dodge .player-torso-svg { transform:translateY(27px) scaleY(.82); transform-origin:bottom; }
+.fighter-dodge .player-hips-svg { transform:translateY(18px); }
+.fighter-dodge .player-leg-left-svg { transform:translate(17px,8px) rotate(24deg) scaleY(.72); transform-origin:top; }
+.fighter-dodge .player-leg-right-svg { transform:translate(-17px,8px) rotate(-24deg) scaleY(.72); transform-origin:top; }
+.fighter-dodge .player-arm-left-svg { transform:translate(13px,24px) rotate(22deg); }
+.fighter-dodge .player-arm-right-svg,.fighter-dodge .blaster-svg { transform:translate(-10px,26px) rotate(-18deg); }
+.fighter-hit { animation:fighter-hit .38s ease-out; }
+.fighter-victory { animation:fighter-victory .65s ease-out forwards; }
+.fighter-defeat { animation:fighter-defeat .6s ease-in forwards; }
+
+/* Articulated character artwork. Geometry lives in fighter-art.tsx; these selectors preserve the combat animation API. */
+.fighter-ground-shadow { fill:rgb(0 0 0 / .58); }
+.fighter-ground-shadow.shadow-heavy { fill:rgb(0 0 0 / .72); }
+.art-arm,.art-leg,.hero-head,.hero-neck,.hero-torso,.hero-pelvis,.hero-blaster { transform-box:view-box; }
+.robot-body>g,.robot-body>g>g { transform-box:fill-box; transform-origin:center; }
+.hero-body>g,.robot-body>g { transition:transform .11s cubic-bezier(.2,.75,.25,1); }
+.pulse-surface-detail,.bastion-surface-detail,.oracle-surface-detail,.nexus-surface-detail { transform-box:fill-box; transform-origin:center; }
+.hero-arm-left { transform-origin:78px 112px; }
+.hero-arm-right { transform-origin:137px 112px; }
+.hero-leg-left { transform-origin:101px 222px; }
+.hero-leg-right { transform-origin:113px 222px; }
+.hero-blaster { transform-origin:195px 160px; }
+.hero-torso { transform-origin:110px 192px; }
+.hero-head { transform-origin:110px 96px; }
+.hero-neck { transform-origin:110px 105px; }
+.hero-pelvis { transform-origin:110px 220px; }
+.fighter-idle.hero .hero-torso { animation:hero-breathe 2.7s ease-in-out infinite; }
+.fighter-idle.hero .hero-head { animation:hero-head-balance 3.1s ease-in-out infinite; }
+.fighter-idle.hero .hero-pelvis { animation:hero-pelvis-shift 3.2s ease-in-out infinite; }
+.fighter-idle.hero .hero-arm-left { animation:hero-guard-life 2.9s ease-in-out infinite; }
+.fighter-idle.hero .hero-leg-left { animation:hero-rear-foot 3.2s ease-in-out infinite; }
+.fighter-idle.hero .hero-arm-right { animation:hero-weapon-steady 3.2s ease-in-out infinite; }
+.fighter-idle.hero .hero-leg-right { animation:hero-weight 3.2s ease-in-out infinite; }
+.fighter-attack.hero .hero-torso { transform:translate(4px,1px) rotate(3deg); }
+.fighter-attack.hero .hero-arm-right { transform:translate(7px,-15px) rotate(-24deg); }
+.fighter-attack.hero .hero-blaster { transform:translate(6px,-2px) rotate(7deg); filter:brightness(1.35); }
+.fighter-attack.hero .hero-arm-left { transform:translate(2px,-3px) rotate(-7deg); }
+.fighter-attack.hero .hero-torso { animation:hero-attack-torso .48s cubic-bezier(.18,.8,.24,1); }
+.fighter-attack.hero .hero-arm-right { animation:hero-attack-arm .48s cubic-bezier(.12,.82,.2,1); }
+.fighter-attack.hero .hero-blaster { animation:hero-blaster-recoil .48s cubic-bezier(.12,.82,.2,1); }
+.fighter-block.hero .hero-arm-left { transform:translate(42px,-25px) rotate(-43deg); }
+.fighter-block.hero .hero-arm-right { transform:translate(-43px,-25px) rotate(41deg); }
+.fighter-block.hero .hero-torso { transform:translateY(3px) scale(.98); }
+.fighter-reflect.hero .hero-arm-left { animation:hero-throw-left .7s ease-out; }
+.fighter-reflect.hero .hero-arm-right { animation:hero-throw-right .7s ease-out; }
+.fighter-dodge.hero .fighter-silhouette { transform:translateY(74px) scale(1.2,.72); transition:transform .15s ease-out; }
+.fighter-dodge.hero .hero-head,.fighter-dodge.hero .hero-neck { transform:translateY(35px); }
+.fighter-dodge.hero .hero-torso { transform:translateY(27px) scaleY(.82); }
+.fighter-dodge.hero .hero-pelvis { transform:translateY(18px); }
+.fighter-dodge.hero .hero-leg-left { transform:translate(17px,8px) rotate(24deg) scaleY(.72); }
+.fighter-dodge.hero .hero-leg-right { transform:translate(-17px,8px) rotate(-24deg) scaleY(.72); }
+.fighter-dodge.hero .hero-arm-left { transform:translate(13px,24px) rotate(22deg); }
+.fighter-dodge.hero .hero-arm-right { transform:translate(-10px,26px) rotate(-18deg); }
+.fighter-hit.hero { animation:none; }
+.fighter-hit.hero .hero-torso { animation:hero-hit-chest .38s ease-out; }
+.fighter-hit.hero .hero-head { animation:hero-hit-head .38s ease-out; }
+.fighter-hit.hero .hero-neck { animation:hero-hit-neck .38s ease-out; }
+.fighter-hit.hero .hero-pelvis { animation:hero-hit-pelvis .38s ease-out; }
+.fighter-hit.hero .hero-leg-left { animation:hero-hit-rear-leg .38s ease-out; }
+.fighter-hit.hero .hero-leg-right { animation:hero-hit-front-leg .38s ease-out; }
+.fighter-hit.hero .hero-arm-left { animation:hero-hit-guard .38s ease-out; }
+.fighter-hit.hero .hero-arm-right { animation:hero-hit-arm .38s ease-out; }
+.fighter-defeat.hero { animation:none; }
+.fighter-defeat.hero .hero-torso,.fighter-defeat.hero .hero-head { transform:translateY(43px) rotate(-19deg); }
+.fighter-defeat.hero .hero-leg-left { transform:translate(14px,17px) rotate(32deg) scaleY(.78); }
+.fighter-defeat.hero .hero-leg-right { transform:translate(-12px,18px) rotate(-26deg) scaleY(.8); }
+.fighter-victory.hero .hero-blaster { transform:translate(-8px,12px) rotate(26deg); }
+.fighter-special.hero .hero-torso { animation:hero-special-coil .62s ease-in-out; }
+.fighter-special.hero .hero-arm-left { animation:hero-special-arm-left .62s ease-in-out; }
+.fighter-special.hero .hero-arm-right { animation:hero-special-arm-right .62s ease-in-out; }
+.fighter-special.hero .hero-pelvis { animation:hero-special-pelvis .62s ease-in-out; }
+
+.fighter-art-pulse { transform:scale(1.04); transform-origin:bottom center; }
+.fighter-art-bastion { transform:scale(1.07); transform-origin:bottom center; }
+.fighter-art-oracle { transform:scale(1.1); transform-origin:bottom center; }
+.fighter-art-nexus { transform:scale(1.08); transform-origin:bottom center; }
+.fighter-opponent.enemy-1 .fighter-silhouette { height:280px; transform:scale(1.04); }
+.fighter-opponent.enemy-2 .fighter-silhouette { height:280px; transform:scale(1.08); }
+.fighter-opponent.enemy-3 .fighter-silhouette { height:280px; transform:scale(1.14); }
+.fighter-opponent.enemy-4 .fighter-silhouette { height:280px; transform:scale(1.12); }
+.pulse-arm-left,.pulse-arm-right,.oracle-arm-left,.oracle-arm-right,.nexus-arm-left,.nexus-arm-right,.bastion-arm-left,.bastion-arm-right { transform-origin:center top; }
+.fighter-idle.enemy-1 .pulse-head { animation:pulse-scan 1.7s steps(2,end) infinite; }
+.fighter-idle.enemy-1 .pulse-arm-right { animation:pulse-aim 2.1s ease-in-out infinite; }
+.fighter-idle.enemy-1 .pulse-torso { animation:pulse-balance 2.6s ease-in-out infinite; }
+.fighter-idle.enemy-1 .pulse-leg-left { animation:pulse-foot-check 2.6s ease-in-out infinite; }
+.fighter-idle.enemy-2 .bastion-body { animation:bastion-pressure 3.6s ease-in-out infinite; }
+.fighter-idle.enemy-2 .bastion-torso path:nth-child(7) { animation:bastion-vent 2.4s ease-in-out infinite; }
+.fighter-idle.enemy-3 .oracle-head { animation:oracle-scan 2s ease-in-out infinite; }
+.fighter-idle.enemy-3 .oracle-sensor-rig { animation:oracle-rig 2.8s ease-in-out infinite; }
+.fighter-idle.enemy-3 .oracle-torso { animation:oracle-balance 3.4s ease-in-out infinite; }
+.fighter-idle.enemy-4 .nexus-core { animation:nexus-core 2.4s ease-in-out infinite; }
+.fighter-idle.enemy-4 .nexus-head { animation:nexus-track 3.2s ease-in-out infinite; }
+.fighter-idle.enemy-4 .nexus-torso { animation:nexus-balance 3.5s ease-in-out infinite; }
+.fighter-opponent.fighter-attack { animation:none; }
+.fighter-opponent.fighter-dodge .fighter-silhouette { transform-origin:bottom center; animation:opponent-dodge .5s cubic-bezier(.2,.75,.25,1); }
+.fighter-opponent.fighter-dodge::after { content:""; position:absolute; left:16%; right:16%; bottom:4px; height:10px; border-radius:50%; background:rgb(148 163 184 / .28); animation:dodge-shadow .5s ease-out; }
+.fighter-dodge.enemy-1 .pulse-torso,.fighter-dodge.enemy-1 .pulse-head,
+.fighter-dodge.enemy-2 .bastion-torso,.fighter-dodge.enemy-2 .bastion-head,
+.fighter-dodge.enemy-3 .oracle-torso,.fighter-dodge.enemy-3 .oracle-head,
+.fighter-dodge.enemy-4 .nexus-torso,.fighter-dodge.enemy-4 .nexus-head { animation:opponent-slip-torso .5s cubic-bezier(.16,.8,.2,1); }
+.fighter-dodge.enemy-1 .pulse-surface-detail,.fighter-dodge.enemy-2 .bastion-surface-detail,.fighter-dodge.enemy-3 .oracle-surface-detail,.fighter-dodge.enemy-4 .nexus-surface-detail { animation:opponent-slip-torso .5s cubic-bezier(.16,.8,.2,1); }
+.fighter-dodge.enemy-1 .pulse-leg-left,.fighter-dodge.enemy-1 .pulse-leg-right,
+.fighter-dodge.enemy-2 .bastion-leg-left,.fighter-dodge.enemy-2 .bastion-leg-right,
+.fighter-dodge.enemy-3 .oracle-leg-left,.fighter-dodge.enemy-3 .oracle-leg-right,
+.fighter-dodge.enemy-4 .nexus-leg-left,.fighter-dodge.enemy-4 .nexus-leg-right { animation:opponent-slip-legs .5s cubic-bezier(.16,.8,.2,1); }
+.fighter-dodge.enemy-1 .pulse-arm-left,.fighter-dodge.enemy-1 .pulse-arm-right,
+.fighter-dodge.enemy-2 .bastion-arm-left,.fighter-dodge.enemy-2 .bastion-arm-right,
+.fighter-dodge.enemy-3 .oracle-arm-left,.fighter-dodge.enemy-3 .oracle-arm-right,
+.fighter-dodge.enemy-4 .nexus-arm-left,.fighter-dodge.enemy-4 .nexus-arm-right { animation:opponent-slip-arms .5s cubic-bezier(.16,.8,.2,1); }
+.fighter-attack.enemy-1 .pulse-arm-right { transform:translate(-8px,-7px) rotate(18deg); }
+.fighter-attack.enemy-2 .bastion-arm-right { transform:translate(-9px,-5px) rotate(12deg); }
+.fighter-attack.enemy-3 .oracle-arm-right { transform:translate(-12px,-5px) rotate(20deg); }
+.fighter-attack.enemy-4 .nexus-arm-right { transform:translate(-10px,-8px) rotate(17deg); }
+.fighter-attack.enemy-1 .pulse-arm-right,.fighter-attack.enemy-2 .bastion-arm-right,.fighter-attack.enemy-3 .oracle-arm-right,.fighter-attack.enemy-4 .nexus-arm-right { animation:enemy-attack-commit .72s cubic-bezier(.15,.8,.22,1); }
+.fighter-opponent.fighter-hit,.fighter-opponent.fighter-defeat { animation:none; }
+.fighter-hit.enemy-1 .pulse-torso { animation:pulse-hit .35s ease-out; }
+.fighter-hit.enemy-1 .pulse-surface-detail { animation:pulse-hit .35s ease-out; }
+.fighter-hit.enemy-1 .pulse-arm-left,.fighter-hit.enemy-1 .pulse-arm-right { animation:pulse-correct .4s ease-out; }
+.fighter-hit.enemy-1 .pulse-head { animation:robot-hit-head .4s ease-out; }
+.fighter-hit.enemy-1 .pulse-leg-left,.fighter-hit.enemy-1 .pulse-leg-right { animation:robot-hit-stance .4s ease-out; }
+.fighter-hit.enemy-2 .bastion-torso { animation:bastion-hit .4s ease-out; }
+.fighter-hit.enemy-2 .bastion-surface-detail { animation:bastion-hit .4s ease-out; }
+.fighter-hit.enemy-2 .bastion-arm-left,.fighter-hit.enemy-2 .bastion-arm-right { animation:bastion-armor-jolt .4s ease-out; }
+.fighter-hit.enemy-2 .bastion-head { animation:robot-hit-head-heavy .4s ease-out; }
+.fighter-hit.enemy-2 .bastion-leg-left,.fighter-hit.enemy-2 .bastion-leg-right { animation:robot-hit-stance-heavy .4s ease-out; }
+.fighter-hit.enemy-3 .oracle-torso { animation:oracle-hit .42s ease-out; }
+.fighter-hit.enemy-3 .oracle-surface-detail { animation:oracle-hit .42s ease-out; }
+.fighter-hit.enemy-3 .oracle-sensor-rig { animation:oracle-rig-hit .45s ease-out; }
+.fighter-hit.enemy-3 .oracle-head { animation:robot-hit-head .45s ease-out; }
+.fighter-hit.enemy-3 .oracle-leg-left,.fighter-hit.enemy-3 .oracle-leg-right { animation:robot-hit-stance .45s ease-out; }
+.fighter-hit.enemy-4 .nexus-torso { animation:nexus-hit .4s ease-out; }
+.fighter-hit.enemy-4 .nexus-surface-detail { animation:nexus-hit .4s ease-out; }
+.fighter-hit.enemy-4 .nexus-arm-left,.fighter-hit.enemy-4 .nexus-arm-right { animation:nexus-panel-hit .4s ease-out; }
+.fighter-hit.enemy-4 .nexus-head { animation:robot-hit-head-heavy .4s ease-out; }
+.fighter-hit.enemy-4 .nexus-leg-left,.fighter-hit.enemy-4 .nexus-leg-right { animation:robot-hit-stance-heavy .4s ease-out; }
+.fighter-defeat.enemy-1 .pulse-torso,.fighter-defeat.enemy-1 .pulse-head { transform:translate(-18px,38px) rotate(-28deg); }
+.fighter-defeat.enemy-1 .pulse-leg-left { transform:translate(12px,13px) rotate(25deg); }
+.fighter-defeat.enemy-2 .bastion-torso { transform:translate(-23px,48px) rotate(-17deg); }
+.fighter-defeat.enemy-2 .bastion-arm-left { transform:translate(-11px,36px) rotate(38deg); }
+.fighter-defeat.enemy-3 .oracle-head { transform:translate(-19px,56px) rotate(-48deg); }
+.fighter-defeat.enemy-3 .oracle-torso { transform:translateY(46px) rotate(-24deg); }
+.fighter-defeat.enemy-3 .oracle-arm-left { transform:translate(8px,27px) rotate(39deg); }
+.fighter-defeat.enemy-4 .nexus-torso,.fighter-defeat.enemy-4 .nexus-head { transform:translateY(43px) rotate(-15deg); }
+.fighter-defeat.enemy-4 .nexus-leg-left { transform:translate(13px,17px) rotate(28deg); }
+.fighter-defeat.enemy-4 .nexus-core { opacity:.25; }
+.player-projectile { position:absolute; z-index:9; left:30%; bottom:43%; width:62px; height:34px; animation:arcade-shot .52s cubic-bezier(.12,.52,.5,1) forwards; filter:drop-shadow(0 0 7px #22d3ee); will-change:transform,left; }
+.player-projectile i { position:absolute; inset:0; border-radius:55% 45% 48% 52%; background:radial-gradient(circle at 67%,#fff 0 18%,#67e8f9 22% 48%,#0891b2 62%,transparent 66%); clip-path:polygon(0 50%,28% 10%,100% 20%,100% 80%,28% 90%); }
+.player-projectile b { position:absolute; left:24px; top:11px; width:27px; height:12px; border-radius:50%; background:#fff; }
+.player-projectile span { position:absolute; left:-14px; top:14px; width:11px; height:6px; border-radius:50%; background:#67e8f9; animation:trail-particle .35s ease-out infinite; }
+.player-projectile span:nth-of-type(2){top:4px;left:-2px;animation-delay:.08s}.player-projectile span:nth-of-type(3){top:25px;left:5px;animation-delay:.16s}.player-projectile span:nth-of-type(4){top:16px;left:-25px;animation-delay:.24s}
+.player-projectile-special { width:155px; height:78px; bottom:39%; animation:special-wave .53s linear .52s forwards; opacity:0; filter:drop-shadow(0 0 10px #d946ef); }
+.player-projectile-special i { background:radial-gradient(ellipse at 62%,#fff 0 14%,#f0abfc 18% 37%,#a21caf 43% 64%,transparent 66%); clip-path:polygon(0 50%,22% 6%,56% 18%,100% 0,82% 50%,100% 100%,56% 82%,22% 94%); }
+.player-projectile-special b { left:61px;top:27px;width:66px;height:24px;background:#fff;box-shadow:0 0 12px #f0abfc; }
+.player-projectile-special span { background:#e879f9;width:18px;height:9px; }
+.reflected-projectile { position:absolute;z-index:10;left:27%;bottom:44%;width:76px;height:40px;filter:drop-shadow(0 0 8px #22d3ee); }
+.reflected-projectile-contact { opacity:1; animation:reflected-contact .16s ease-in-out forwards; }
+.reflected-projectile-travel { opacity:0; animation:reflected-shot .45s linear forwards; }
+.reflected-projectile i { position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,#fff 0 20%,#67e8f9 25% 53%,#0e7490 58%,transparent 65%); }
+.reflected-projectile b { position:absolute;inset:8px;border:3px solid white;border-radius:50%; }
+.reflected-projectile span { position:absolute;left:-10px;top:16px;width:10px;height:7px;background:#67e8f9;transform:rotate(45deg); }
+.reflected-projectile span:nth-of-type(2){top:3px;left:5px}.reflected-projectile span:nth-of-type(3){top:30px;left:9px}
+.block-contact-flash { position:absolute;z-index:11;left:25%;bottom:39%;width:92px;height:92px;border:7px solid white;border-radius:50%;box-shadow:0 0 20px #22d3ee;animation:block-contact .32s ease-out forwards; }
+.block-contact-flash i { position:absolute;inset:15px;border:5px solid #67e8f9;transform:rotate(45deg); }
+.fighter-opponent.fighter-attack { animation:enemy-prepare .7s ease-in-out infinite alternate; }
+
+.enemy-charge { position:absolute; z-index:3; right:28%; bottom:46%; width:58px; height:58px; border-radius:50%; background:#fb7185; box-shadow:0 0 18px 8px #f43f5e,0 0 50px #fb7185; animation:charge .38s ease-in-out infinite alternate; }
+.enemy-charge-2 { border-radius:16%; background:#fb923c; }
+.enemy-charge-3 { background:#c026d3; box-shadow:0 0 18px 8px #a855f7,0 0 55px #e879f9; }
+.enemy-charge-4 { background:#e11d48; box-shadow:0 0 20px 10px #be123c,0 0 70px #fb7185; }
+.enemy-projectile { position:absolute; z-index:7; right:24%; bottom:43%; width:68px; height:34px; border-radius:50% 10% 10% 50%; background:linear-gradient(90deg,#fff,#fb7185 32%,#be123c); box-shadow:0 0 14px 5px #fb7185; animation:enemy-projectile linear forwards; will-change:right,transform; }
+.enemy-projectile span { position:absolute; inset:5px 38px 5px -45px; border-radius:50%; background:linear-gradient(90deg,transparent,#fb7185); }
+.enemy-projectile i { position:absolute; left:-22px; top:4px; width:38px; height:3px; background:linear-gradient(90deg,transparent,#fff); transform:rotate(-5deg); opacity:.75; }
+.enemy-projectile b { position:absolute; inset:5px 10px; border-radius:50%; background:#fff; opacity:.7; animation:projectile-core .14s ease-in-out infinite alternate; }
+.projectile-2 { height:24px; border-radius:4px; background:#fb923c; transform:rotate(-4deg); }
+.projectile-3 { width:52px; height:52px; border-radius:48% 52% 42% 58%; background:#d946ef; }
+.projectile-4 { width:78px; height:46px; background:radial-gradient(circle at 30%,#fff,#f43f5e 35%,#4c0519 72%); }
+.player-power { position:absolute; z-index:10; left:29%; bottom:40%; width:86px; height:76px; border-radius:50%; background:radial-gradient(circle,#fff 0 12%,#67e8f9 16% 34%,transparent 62%); animation:muzzle-flash .28s ease-out forwards; }
+.player-power i { position:absolute;left:50%;top:50%;width:70px;height:7px;background:#fff;transform-origin:left;transform:rotate(0deg); }
+.player-power i:nth-child(2){transform:rotate(45deg)}.player-power i:nth-child(3){transform:rotate(-45deg)}
+.player-power-special { left:22%;bottom:30%;width:190px;height:190px;background:conic-gradient(from 0deg,transparent,#d946ef,#fff,transparent,#a855f7,transparent);animation:special-charge-flash .62s ease-out forwards; }
+.impact-burst { position:absolute; z-index:12; bottom:34%; width:138px; height:138px; background:#fff; clip-path:polygon(50% 0,61% 34%,89% 11%,72% 42%,100% 50%,69% 59%,90% 90%,60% 70%,50% 100%,41% 69%,11% 89%,31% 59%,0 50%,32% 42%,10% 12%,40% 33%); box-shadow:0 0 22px #facc15; animation:impact .36s cubic-bezier(.1,.75,.25,1) forwards; }
+.impact-burst::after { content:""; position:absolute; inset:34px; border:5px solid #fff; border-radius:50%; animation:impact-ring .32s ease-out forwards; }
+.impact-burst i { position:absolute;left:50%;top:50%;width:42px;height:8px;background:#67e8f9;transform-origin:left; }
+.impact-burst i:nth-child(1){transform:rotate(15deg)}.impact-burst i:nth-child(2){transform:rotate(75deg)}.impact-burst i:nth-child(3){transform:rotate(145deg)}.impact-burst i:nth-child(4){transform:rotate(215deg)}.impact-burst i:nth-child(5){transform:rotate(285deg)}
+.impact-special { width:190px;height:190px;background:#fff;box-shadow:0 0 28px #d946ef; }
+.impact-special i { width:70px;height:12px;background:#e879f9; }
+.impact-reflected { box-shadow:0 0 30px #22d3ee;background:#cffafe; }
+.impact-right { right:18%; } .impact-left { left:18%; }
+.special-camera { animation:camera-special .65s cubic-bezier(.2,.75,.2,1); }
+.arena-special-light::after { content:""; position:absolute; z-index:3; inset:0; pointer-events:none; background:radial-gradient(circle at 27% 58%,rgb(217 70 239 / .22),transparent 33%); animation:special-arena-light .7s ease-out forwards; }
+.recognized-callout { color:#67e8f9; font-size:34px; line-height:1; font-weight:1000; font-style:italic; text-shadow:0 3px 0 #164e63,0 0 18px #22d3ee; animation:callout .48s ease-out; }
+.combat-feedback { margin-top:8px; color:#fde047; font-size:20px; font-weight:900; text-shadow:0 2px 4px #000; }
+.incoming-warning { margin-top:8px; color:#fecaca; font-size:16px; font-weight:1000; animation:warning .35s ease-in-out infinite alternate; }
+.analysis-tag { position:absolute; z-index:8; top:22%; right:9%; color:#f0abfc; font-size:13px; font-weight:900; letter-spacing:.2em; text-shadow:0 0 10px #d946ef; animation:warning .8s ease-in-out infinite alternate; }
+.special-meter { position:relative; border:2px solid transparent; border-radius:12px; padding:8px 10px 10px; transform-origin:center; }
+.special-meter-not-ready { border-color:#facc15; animation:special-meter-reject .8s ease-out; }
+.special-meter-not-ready .special-meter-track { box-shadow:0 0 0 3px #fff,0 0 16px #facc15; }
+.special-meter-not-ready .special-meter-fill { filter:brightness(1.8); }
+.special-not-ready-text { position:absolute; right:10px; top:-20px; color:#fde047; font-size:14px; font-weight:1000; letter-spacing:.08em; text-shadow:0 2px 3px #000; animation:special-not-ready-text .8s ease-out forwards; }
+
+@keyframes arena-pulse { to { opacity:.25; transform:scale(.7); } }
+@keyframes fighter-special { 0%{transform:scaleX(1) rotate(0)} 22%{transform:scaleX(.45) rotate(95deg)} 48%{transform:scaleX(1.08) rotate(205deg)} 75%{transform:scaleX(.42) rotate(300deg)} 100%{transform:scaleX(1) rotate(360deg)} }
+@keyframes special-charge { 0%{transform:scale(.3);opacity:0} 70%{transform:scale(1.35);opacity:1} 100%{transform:scale(1);opacity:.7} }
+@keyframes block-throw-left { 0%,24%{transform:translate(37px,-19px) rotate(-31deg)} 50%{transform:translate(42px,-23px) rotate(-38deg)} 72%{transform:translate(68px,-25px) rotate(-62deg)} 100%{transform:none} }
+@keyframes block-throw-right { 0%,24%{transform:translate(-35px,-16px) rotate(32deg)} 50%{transform:translate(-42px,-20px) rotate(39deg)} 72%{transform:translate(-65px,-23px) rotate(62deg)} 100%{transform:none} }
+@keyframes fighter-hit { 35% { transform:translateX(-30px) rotate(-10deg); filter:brightness(2.5); } }
+@keyframes fighter-victory { to { transform:translateY(-18px) scale(1.08); filter:drop-shadow(0 0 22px #facc15); } }
+@keyframes fighter-defeat { to { transform:translateY(35px) rotate(72deg); opacity:.65; } }
+@keyframes enemy-prepare { to { transform:translateY(-4px) scale(1.04); filter:drop-shadow(0 0 16px #fb7185); } }
+@keyframes shield-pulse { 50% { transform:scale(1.12); box-shadow:0 0 32px #22d3ee; } }
+@keyframes charge { to { transform:scale(1.22); filter:brightness(1.6); } }
+@keyframes enemy-projectile { 0% { right:28%; opacity:0; transform:scale(.25); } 22% { right:28%; opacity:1; transform:scale(1); } 100% { right:75%; opacity:1; } }
+@keyframes arcade-shot { from{left:30%;transform:scale(.75,1);opacity:1} to{left:74%;transform:scale(1.25,.92);opacity:.9} }
+@keyframes special-wave { 0%{left:27%;opacity:0;transform:scale(.25) rotate(-8deg)} 8%{opacity:1} 100%{left:72%;opacity:.9;transform:scale(1.18) rotate(4deg)} }
+@keyframes reflected-shot { 0%{left:27%;opacity:1;transform:scale(.65)} 100%{left:72%;opacity:1;transform:scale(1.12)} }
+@keyframes reflected-contact { 0%{transform:scale(.72);filter:brightness(1.4)} 55%{transform:scale(1.22);filter:brightness(2.5)} 100%{transform:scale(.9);filter:brightness(1.8)} }
+@keyframes trail-particle { to{transform:translateX(-25px) scale(.2);opacity:0} }
+@keyframes muzzle-flash { from{transform:scale(.2);opacity:1} to{transform:scale(1.5);opacity:0} }
+@keyframes special-charge-flash { 0%{transform:scale(.2) rotate(0);opacity:0} 55%{opacity:.9} 100%{transform:scale(1.4) rotate(300deg);opacity:0} }
+@keyframes block-contact { 0%{transform:scale(.25);opacity:1} 55%{transform:scale(1.15);opacity:1} 100%{transform:scale(1.45);opacity:0} }
+@keyframes impact { from { transform:scale(.2) rotate(0); opacity:1; } to { transform:scale(1.4) rotate(35deg); opacity:0; } }
+@keyframes callout { from { transform:scale(.35); opacity:0; } 55% { transform:scale(1.2); } }
+@keyframes warning { to { opacity:.35; transform:scale(.98); } }
+@keyframes special-meter-reject { 0%,100%{transform:translateX(0) scale(1)} 18%{transform:translateX(-5px) scale(1.035)} 36%{transform:translateX(5px) scale(1.055)} 54%{transform:translateX(-4px) scale(1.035)} 72%{transform:translateX(3px) scale(1.02)} }
+@keyframes special-not-ready-text { 0%{opacity:0;transform:translateY(6px) scale(.8)} 18%,70%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-4px)} }
+@keyframes hero-breathe { 50%{transform:translateY(-2px) scaleY(1.012)} }
+@keyframes hero-weapon-steady { 50%{transform:translateY(1px) rotate(.7deg)} }
+@keyframes hero-weight { 50%{transform:translateX(1px) rotate(-.8deg)} }
+@keyframes hero-head-balance { 35%{transform:translate(1px,-.5px) rotate(.7deg)} 72%{transform:translate(-.5px,.5px) rotate(-.4deg)} }
+@keyframes hero-pelvis-shift { 50%{transform:translateX(-1.5px) rotate(.6deg)} }
+@keyframes hero-guard-life { 45%{transform:translateY(-1.5px) rotate(-1deg)} }
+@keyframes hero-rear-foot { 50%{transform:rotate(.7deg)} }
+@keyframes hero-throw-left { 0%,23%{transform:translate(42px,-25px) rotate(-43deg)} 48%{transform:translate(45px,-28px) rotate(-47deg)} 72%{transform:translate(70px,-23px) rotate(-66deg)} 100%{transform:none} }
+@keyframes hero-throw-right { 0%,23%{transform:translate(-43px,-25px) rotate(41deg)} 48%{transform:translate(-47px,-27px) rotate(46deg)} 72%{transform:translate(-68px,-22px) rotate(65deg)} 100%{transform:none} }
+@keyframes hero-hit-chest { 0%{transform:none} 12%,24%{transform:translate(-17px,2px) rotate(-10deg)} 42%{transform:translate(-12px,1px) rotate(-7deg)} 72%{transform:translate(2px,0) rotate(1.5deg)} 100%{transform:none} }
+@keyframes hero-hit-head { 0%,7%{transform:none} 19%,31%{transform:translate(-13px,-3px) rotate(-14deg)} 52%{transform:translate(-7px,1px) rotate(-7deg)} 82%{transform:translate(1px,0) rotate(1deg)} 100%{transform:none} }
+@keyframes hero-hit-neck { 0%,5%{transform:none} 18%,30%{transform:translate(-8px,1px) rotate(-8deg)} 100%{transform:none} }
+@keyframes hero-hit-pelvis { 0%,8%{transform:none} 22%,42%{transform:translate(-6px,3px) rotate(-3deg)} 70%{transform:translate(2px,0) rotate(1deg)} 100%{transform:none} }
+@keyframes hero-hit-arm { 0%,8%{transform:none} 24%,42%{transform:translate(-15px,4px) rotate(-18deg)} 100%{transform:none} }
+@keyframes hero-hit-guard { 0%,10%{transform:none} 26%,44%{transform:translate(-8px,-1px) rotate(-10deg)} 100%{transform:none} }
+@keyframes hero-hit-rear-leg { 0%,10%{transform:none} 25%,48%{transform:translateX(-4px) rotate(-4deg)} 100%{transform:none} }
+@keyframes hero-hit-front-leg { 0%,10%{transform:none} 25%,48%{transform:translate(3px,1px) rotate(3deg)} 100%{transform:none} }
+@keyframes hero-special-coil { 0%{transform:none} 14%{transform:translate(-4px,5px) rotate(-6deg)} 48%{transform:translate(2px,-2px) rotate(4deg)} 78%{transform:translate(7px,0) rotate(8deg)} 100%{transform:none} }
+@keyframes hero-special-arm-left { 0%{transform:none} 18%{transform:translate(5px,3px) rotate(11deg)} 55%{transform:translate(10px,-7px) rotate(-18deg)} 82%{transform:translate(15px,-10px) rotate(-24deg)} 100%{transform:none} }
+@keyframes hero-special-arm-right { 0%{transform:none} 18%{transform:translate(-4px,5px) rotate(-8deg)} 55%{transform:translate(8px,-11px) rotate(-22deg)} 82%{transform:translate(13px,-14px) rotate(-29deg)} 100%{transform:none} }
+@keyframes hero-special-pelvis { 0%{transform:none} 16%{transform:translate(-3px,3px) rotate(-3deg)} 70%{transform:translate(4px,0) rotate(4deg)} 100%{transform:none} }
+@keyframes pulse-scan { 50%{transform:translateX(-2px) rotate(-2deg)} }
+@keyframes pulse-aim { 50%{transform:rotate(2deg) translateY(-2px)} }
+@keyframes pulse-balance { 50%{transform:translate(1px,1px) rotate(.6deg)} }
+@keyframes pulse-foot-check { 50%{transform:translateX(-1px) rotate(-1deg)} }
+@keyframes bastion-pressure { 50%{transform:scaleX(1.008) translateY(1px)} }
+@keyframes bastion-vent { 50%{filter:brightness(1.7)} }
+@keyframes oracle-scan { 35%{transform:rotate(3deg)} 70%{transform:rotate(-2deg)} }
+@keyframes oracle-rig { 50%{transform:translateY(-2px) rotate(3deg)} }
+@keyframes oracle-balance { 50%{transform:translateX(-1px) rotate(-.7deg)} }
+@keyframes nexus-core { 50%{transform:scale(1.045)} }
+@keyframes nexus-track { 50%{transform:translateX(-1px) rotate(-1deg)} }
+@keyframes nexus-balance { 50%{transform:translateY(1px) rotate(.4deg)} }
+@keyframes pulse-hit { 40%{transform:translateX(-16px) rotate(-8deg)} }
+@keyframes pulse-correct { 45%{transform:translateX(-9px) rotate(-10deg)} }
+@keyframes bastion-hit { 45%{transform:translateX(-8px) scaleX(.97)} }
+@keyframes bastion-armor-jolt { 42%{transform:translateX(-5px) rotate(-4deg)} }
+@keyframes oracle-hit { 42%{transform:translateX(-22px) rotate(-15deg)} }
+@keyframes oracle-rig-hit { 45%{transform:translate(-14px,-6px) rotate(-24deg)} }
+@keyframes nexus-hit { 40%{transform:translateX(-12px) rotate(-6deg)} }
+@keyframes nexus-panel-hit { 45%{transform:translateX(-7px) rotate(-7deg)} }
+@keyframes robot-hit-head { 0%,8%{transform:none} 25%,42%{transform:translate(-10px,-2px) rotate(-12deg)} 70%{transform:translate(2px,0) rotate(2deg)} 100%{transform:none} }
+@keyframes robot-hit-head-heavy { 0%,8%{transform:none} 27%,45%{transform:translate(-6px,1px) rotate(-6deg)} 72%{transform:translate(1px,0) rotate(1deg)} 100%{transform:none} }
+@keyframes robot-hit-stance { 0%,12%{transform:none} 30%,54%{transform:translateX(-4px) rotate(-3deg)} 100%{transform:none} }
+@keyframes robot-hit-stance-heavy { 0%,12%{transform:none} 30%,58%{transform:translateX(-2px) rotate(-1.5deg)} 100%{transform:none} }
+@keyframes opponent-dodge { 0%{transform:translateX(0) scale(1.06)} 9%{transform:translate(-3px,1px) scale(1.065,.995)} 27%,72%{transform:translate(38px,4px) scale(1.02,.96)} 86%{transform:translate(12px,1px) scale(1.05,.99)} 100%{transform:translateX(0) scale(1.06)} }
+@keyframes opponent-slip-torso { 0%{transform:none} 10%{transform:translate(-2px,1px) rotate(-2deg)} 27%,72%{transform:translate(7px,8px) rotate(11deg)} 100%{transform:none} }
+@keyframes opponent-slip-legs { 0%{transform:none} 25%,72%{transform:translate(2px,4px) rotate(4deg) scaleY(.94)} 100%{transform:none} }
+@keyframes opponent-slip-arms { 0%{transform:none} 25%,72%{transform:translate(5px,4px) rotate(8deg)} 100%{transform:none} }
+@keyframes hero-attack-torso { 0%{transform:none} 10%{transform:translateX(-3px) rotate(-2deg)} 28%,65%{transform:translate(5px,1px) rotate(3deg)} 100%{transform:none} }
+@keyframes hero-attack-arm { 0%{transform:none} 10%{transform:translate(-3px,3px) rotate(5deg)} 27%,62%{transform:translate(8px,-15px) rotate(-24deg)} 72%{transform:translate(4px,-12px) rotate(-19deg)} 100%{transform:none} }
+@keyframes hero-blaster-recoil { 0%,10%{transform:none} 27%{transform:translate(7px,-2px) rotate(7deg)} 38%{transform:translate(2px,-1px) rotate(10deg)} 63%{transform:translate(7px,-2px) rotate(7deg)} 100%{transform:none} }
+@keyframes dodge-shadow { 0%,100%{transform:scaleX(.8);opacity:0} 30%,70%{transform:translateX(20px) scaleX(1.2);opacity:1} }
+@keyframes health-danger-pulse { to{filter:brightness(1.08)} }
+@keyframes haze-drift { to{transform:translateX(5%);opacity:.35} }
+@keyframes ambient-dust { 0%{transform:translate(0,20px);opacity:0} 15%{opacity:.45} 80%{opacity:.2} 100%{transform:translate(18px,-75px);opacity:0} }
+@keyframes round-title { 0%{opacity:0;transform:scale(1.35);letter-spacing:.35em} 25%,68%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(.92)} }
+@keyframes fight-title { 0%{opacity:0;transform:scale(2.1) skewX(-12deg)} 24%,60%{opacity:1;transform:scale(1) skewX(-7deg)} 100%{opacity:0;transform:scale(.72) skewX(-7deg)} }
+@keyframes foot-dust { 0%{opacity:.5;transform:translateY(0) scale(.4)} 100%{opacity:0;transform:translateY(-18px) scale(1.8,.7)} }
+@keyframes finish-dust { 0%{opacity:.55;transform:translateY(0) scale(.3)} 100%{opacity:0;transform:translateY(-28px) scale(2.1,.8)} }
+@keyframes projectile-core { to{opacity:1;filter:brightness(1.3)} }
+@keyframes impact-ring { from{transform:scale(.25);opacity:1} to{transform:scale(2.2);opacity:0} }
+@keyframes camera-special { 0%,100%{transform:scale(1)} 35%,70%{transform:scale(1.012)} }
+@keyframes special-arena-light { 0%,100%{opacity:0} 24%,62%{opacity:1} }
+@keyframes enemy-attack-commit { 0%{transform:none} 12%{transform:translate(3px,2px) rotate(-3deg)} 35%,72%{transform:translate(-10px,-7px) rotate(17deg)} 100%{transform:none} }
+@keyframes arena-parallax { to{transform:translateX(4px)} }
+@keyframes crowd-shift { to{transform:translateY(2px) rotate(.8deg);opacity:.72} }
+.arena-shake { animation:arena-shake .28s ease-out; }
+.arena-shake-strong { animation:arena-shake-strong .42s ease-out; }
+@keyframes arena-shake { 20% { transform:translateX(-5px); } 45% { transform:translateX(5px); } 70% { transform:translateX(-2px); } }
+@keyframes arena-shake-strong { 15%{transform:translate(-10px,3px)} 35%{transform:translate(9px,-3px)} 55%{transform:translate(-7px,2px)} 75%{transform:translate(5px,-1px)} }
+
+@media (max-height: 800px) {
+  .battle-arena { min-height:360px !important; }
+  .fighter { transform:scale(.84); transform-origin:bottom; }
+}
+@media (max-width: 900px) {
+  .fighter { transform:scale(.75); }
+  .battle-arena { min-height:340px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fighter,.enemy-projectile,.player-power,.impact-burst { animation-duration:.01ms !important; }
+  .arena-dust,.arena-haze,.round-intro,.combat-dust,.finish-dust { display:none !important; }
+}
