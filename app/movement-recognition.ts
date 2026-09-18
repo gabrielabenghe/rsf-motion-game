@@ -46,7 +46,7 @@ export type RecognitionDebug = GestureDebug & {
 export type RecognitionResult = { scores:RecognitionScores; detectedAction:ActionLabel|null; emittedAction:ActionLabel|null; latencyMs:number|null; debug?:RecognitionDebug };
 
 export const ACTION_GUIDES:Record<ActionLabel,{title:string;instruction:string;hint:string}>={
-  ATTACK:{title:"ATACĂ",instruction:"Întinde un braț în lateral.",hint:"Oricare braț funcționează."},
+  ATTACK:{title:"ATACĂ",instruction:"Întinde brațul drept în lateral.",hint:"Ține brațul aproximativ orizontal."},
   BLOCK:{title:"BLOCHEAZĂ",instruction:"Adu ambele brațe în fața pieptului.",hint:"Brațele pot fi apropiate sau încrucișate."},
   DODGE:{title:"EVITĂ",instruction:"Ghemuiește-te sau apleacă-te într-o parte.",hint:"Poți coborî, te poți apleca la stânga sau la dreapta."},
   SPECIAL:{title:"SPECIAL",instruction:"Ridică ambele brațe.",hint:"Coatele pot rămâne îndoite."},
