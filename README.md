@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# YR Motion Game
 
-## Getting Started
+YR Motion Game is a browser-based fighting game controlled through real-time body movement recognition.
 
-First, run the development server:
+The project was developed for Romanian Science Festival 2026 – Young Researchers.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## How it works
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The webcam stream is processed using MediaPipe. A geometric rule-based detector maps body landmarks to four actions:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- ATTACK — extend the right arm sideways
+- BLOCK — raise both arms toward the chest
+- DODGE — lower the upper body
+- SPECIAL — raise both arms
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Distances are normalized using shoulder width to reduce sensitivity to the player's distance from the camera.
 
-## Learn More
+## Tech stack
 
-To learn more about Next.js, take a look at the following resources:
+- Next.js
+- TypeScript
+- MediaPipe Pose Landmarker
+- MediaPipe Hand Landmarker
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Research
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The research paper evaluates gesture-recognition accuracy and latency at different distances from the camera.
 
-## Deploy on Vercel
+## Source
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The complete implementation is publicly available in this repository for transparency and reproducibility.
