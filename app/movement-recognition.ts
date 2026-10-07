@@ -52,7 +52,10 @@ export const ACTION_GUIDES:Record<ActionLabel,{title:string;instruction:string;h
   SPECIAL:{title:"SPECIAL",instruction:"Ridică ambele brațe.",hint:"Coatele pot rămâne îndoite."},
 };
 
-export const GESTURE_VISIBILITY_THRESHOLD=.20;
+// Distal landmarks (especially wrists) lose confidence first when the player
+// stands farther from the camera. Keep a modest floor so valid full-body poses
+// remain usable without accepting completely unreliable points.
+export const GESTURE_VISIBILITY_THRESHOLD=.08;
 const LEFT_SHOULDER=11,RIGHT_SHOULDER=12,LEFT_ELBOW=13,RIGHT_ELBOW=14,LEFT_WRIST=15,RIGHT_WRIST=16,NOSE=0;
 const HOLD_MS=100, RELEASE_MS=200, POSE_GRACE_MS=160;
 const emptyScores=():RecognitionScores=>({ATTACK:0,BLOCK:0,DODGE:0,SPECIAL:0});
@@ -62,9 +65,16 @@ const finite=(n:number)=>Number.isFinite(n)?n:0;
 const visibility=(p?:LandmarkSnapshot)=>p?.visibility??1;
 
 export function getGestureDebug(landmarks:ReadonlyArray<LandmarkSnapshot>,neutralBaseline:NeutralBaseline|null):GestureDebug{
-  const ls=landmarks[LEFT_SHOULDER],rs=landmarks[RIGHT_SHOULDER],le=landmarks[LEFT_ELBOW],re=landmarks[RIGHT_ELBOW],lw=landmarks[LEFT_WRIST],rw=landmarks[RIGHT_WRIST],nose=landmarks[NOSE];
-  const upperBodyUsable=[ls,rs,le,re,lw,rw].every(visible);
-  if(!upperBodyUsable)return{shoulderWidth:0,leftShoulderVisibility:visibility(ls),rightShoulderVisibility:visibility(rs),leftElbowVisibility:visibility(le),rightElbowVisibility:visibility(re),leftWristVisibility:visibility(lw),rightWristVisibility:visibility(rw),leftWristVisible:visible(lw),rightWristVisible:visible(rw),leftArmUp:false,rightArmUp:false,leftRaisedAmount:0,rightRaisedAmount:0,specialCondition:false,leftWristRaisedForBlock:false,rightWristRaisedForBlock:false,leftElbowRaised:false,rightElbowRaised:false,leftForearmInward:false,rightForearmInward:false,trueCross:false,leftArmDistanceFromNeutral:0,rightArmDistanceFromNeutral:0,wristDistance:0,blockCondition:false,verticalDrop:0,lateralShift:0,shoulderTilt:0,noseDrop:0,dodgeCondition:false,leftExtension:0,rightExtension:0,rightShoulderX:rs?.x??0,rightShoulderY:rs?.y??0,rightElbowX:re?.x??0,rightElbowY:re?.y??0,rightWristX:rw?.x??0,rightWristY:rw?.y??0,rightHorizontalExtension:0,rightVerticalOffset:0,rightElbowHorizontalExtension:0,attackAngle:0,rightArmSideways:false,leftWristChestY:0,rightWristChestY:0,strongCross:false,neutralShoulderCenterY:neutralBaseline?.shoulderCenterY??0,currentShoulderCenterY:0,verticalShoulderDrop:0,neutralNoseY:neutralBaseline?.noseY??0,currentNoseY:nose?.y??0,attackCondition:false,rawGesture:null,baselineReady:Boolean(neutralBaseline)};
+  const ls=landmarks[LEFT_SHOULDER],rs=landmarks[RIGHT_SHOULDER],le=landmarks[LEFT_ELBOW],re=landmarks[RIGHT_ELBOW],rawLw=landmarks[LEFT_WRIST],rawRw=landmarks[RIGHT_WRIST],nose=landmarks[NOSE];
+  const leftWristVisible=visible(rawLw),rightWristVisible=visible(rawRw);
+  const upperBodyUsable=[ls,rs,le,re].every(visible);
+  if(!upperBodyUsable)return{shoulderWidth:0,leftShoulderVisibility:visibility(ls),rightShoulderVisibility:visibility(rs),leftElbowVisibility:visibility(le),rightElbowVisibility:visibility(re),leftWristVisibility:visibility(rawLw),rightWristVisibility:visibility(rawRw),leftWristVisible,rightWristVisible,leftArmUp:false,rightArmUp:false,leftRaisedAmount:0,rightRaisedAmount:0,specialCondition:false,leftWristRaisedForBlock:false,rightWristRaisedForBlock:false,leftElbowRaised:false,rightElbowRaised:false,leftForearmInward:false,rightForearmInward:false,trueCross:false,leftArmDistanceFromNeutral:0,rightArmDistanceFromNeutral:0,wristDistance:0,blockCondition:false,verticalDrop:0,lateralShift:0,shoulderTilt:0,noseDrop:0,dodgeCondition:false,leftExtension:0,rightExtension:0,rightShoulderX:rs?.x??0,rightShoulderY:rs?.y??0,rightElbowX:re?.x??0,rightElbowY:re?.y??0,rightWristX:rawRw?.x??0,rightWristY:rawRw?.y??0,rightHorizontalExtension:0,rightVerticalOffset:0,rightElbowHorizontalExtension:0,attackAngle:0,rightArmSideways:false,leftWristChestY:0,rightWristChestY:0,strongCross:false,neutralShoulderCenterY:neutralBaseline?.shoulderCenterY??0,currentShoulderCenterY:0,verticalShoulderDrop:0,neutralNoseY:neutralBaseline?.noseY??0,currentNoseY:nose?.y??0,attackCondition:false,rawGesture:null,baselineReady:Boolean(neutralBaseline)};
+  // When a hand is just outside the frame, MediaPipe often still tracks the
+  // shoulder and elbow reliably. Continue the upper-arm vector to estimate a
+  // conservative wrist position instead of discarding the whole pose.
+  const inferredWrist=(shoulder:LandmarkSnapshot,elbow:LandmarkSnapshot):LandmarkSnapshot=>({x:elbow.x+(elbow.x-shoulder.x)*.85,y:elbow.y+(elbow.y-shoulder.y)*.85,z:elbow.z+(elbow.z-shoulder.z)*.85,visibility:1});
+  const lw=leftWristVisible?rawLw:inferredWrist(ls,le);
+  const rw=rightWristVisible?rawRw:inferredWrist(rs,re);
   const shoulderWidth=Math.max(distance(ls,rs),.0001);
   const shoulderCenterX=(ls.x+rs.x)/2,shoulderCenterY=(ls.y+rs.y)/2;
   const leftRaisedAmount=(ls.y-lw.y)/shoulderWidth;
@@ -88,7 +98,10 @@ export function getGestureDebug(landmarks:ReadonlyArray<LandmarkSnapshot>,neutra
   const rightElbowRaised=neutralBaseline!==null&&nre.y<.78&&neutralBaseline.rightElbow.y-nre.y>.08;
   const leftForearmInward=Math.abs(lw.x-shoulderCenterX)<Math.abs(le.x-shoulderCenterX)+.10*shoulderWidth;
   const rightForearmInward=Math.abs(rw.x-shoulderCenterX)<Math.abs(re.x-shoulderCenterX)+.10*shoulderWidth;
-  const trueCross=lw.x>=shoulderCenterX&&rw.x<=shoulderCenterX;
+  // A crossed guard reverses the wrists' horizontal order relative to the
+  // shoulders. Comparing the orders works for both mirrored and unmirrored
+  // camera feeds.
+  const trueCross=(lw.x-rw.x)*(ls.x-rs.x)<=0;
   const armDistance=(wrist:NormalizedPoint,elbow:NormalizedPoint,neutralWrist:NormalizedPoint,neutralElbow:NormalizedPoint)=>Math.hypot(wrist.x-neutralWrist.x,wrist.y-neutralWrist.y,elbow.x-neutralElbow.x,elbow.y-neutralElbow.y);
   const leftArmDistanceFromNeutral=neutralBaseline?armDistance(nlw,nle,neutralBaseline.leftWrist,neutralBaseline.leftElbow):0;
   const rightArmDistanceFromNeutral=neutralBaseline?armDistance(nrw,nre,neutralBaseline.rightWrist,neutralBaseline.rightElbow):0;
@@ -96,23 +109,37 @@ export function getGestureDebug(landmarks:ReadonlyArray<LandmarkSnapshot>,neutra
   const leftOppositeShoulder=distance(lw,rs)<=distance(lw,ls)+.15*shoulderWidth;
   const rightOppositeShoulder=distance(rw,ls)<=distance(rw,rs)+.15*shoulderWidth;
   const strongCross=leftOppositeShoulder&&rightOppositeShoulder;
+  const crossedGuard=trueCross||strongCross;
   const looseGuard=(wristDistance<1.0||strongCross)&&leftForearmInward&&rightForearmInward;
-  const uprightForBlock=Math.abs(verticalDrop)<.18&&shoulderTilt<.16;
-  const blockCondition=Boolean(neutralBaseline)&&uprightForBlock&&leftWristRaisedForBlock&&rightWristRaisedForBlock&&clearlyDifferentFromNeutral&&looseGuard;
+  // Moving farther from the camera changes framing and can make verticalDrop
+  // differ from the initial baseline. A clear X is sufficient on its own;
+  // the looser guard still needs a meaningful change from the neutral pose.
+  const uprightForBlock=shoulderTilt<.28;
+  const blockCondition=Boolean(neutralBaseline)&&uprightForBlock&&leftWristRaisedForBlock&&rightWristRaisedForBlock&&(crossedGuard||(clearlyDifferentFromNeutral&&looseGuard));
   const dodgeCondition=Boolean(neutralBaseline)&&(verticalDrop>.25||noseDrop>.28);
   const leftExtension=Math.abs(lw.x-ls.x)/shoulderWidth;
   const rightExtension=Math.abs(rw.x-rs.x)/shoulderWidth;
+  const leftVerticalOffset=Math.abs(lw.y-ls.y)/shoulderWidth;
   const rightHorizontalExtension=rightExtension;
   const rightVerticalOffset=Math.abs(rw.y-rs.y)/shoulderWidth;
+  const leftElbowHorizontalExtension=Math.abs(le.x-ls.x)/shoulderWidth;
   const rightElbowHorizontalExtension=Math.abs(re.x-rs.x)/shoulderWidth;
+  const leftAttackAngle=Math.atan2(Math.abs(lw.y-ls.y),Math.max(Math.abs(lw.x-ls.x),.0001))*180/Math.PI;
   const attackAngle=Math.atan2(Math.abs(rw.y-rs.y),Math.max(Math.abs(rw.x-rs.x),.0001))*180/Math.PI;
-  const rightArmSideways=rightHorizontalExtension>.65&&rightVerticalOffset<.60&&attackAngle<40;
-  const attackCondition=rightArmSideways;
-  const rawGesture=specialCondition?"SPECIAL":blockCondition?"BLOCK":dodgeCondition?"DODGE":attackCondition?"ATTACK":null;
-  return{shoulderWidth,leftShoulderVisibility:visibility(ls),rightShoulderVisibility:visibility(rs),leftElbowVisibility:visibility(le),rightElbowVisibility:visibility(re),leftWristVisibility:visibility(lw),rightWristVisibility:visibility(rw),leftWristVisible:true,rightWristVisible:true,leftArmUp,rightArmUp,leftRaisedAmount:finite(leftRaisedAmount),rightRaisedAmount:finite(rightRaisedAmount),specialCondition,leftWristRaisedForBlock,rightWristRaisedForBlock,leftElbowRaised,rightElbowRaised,leftForearmInward,rightForearmInward,trueCross,leftArmDistanceFromNeutral:finite(leftArmDistanceFromNeutral),rightArmDistanceFromNeutral:finite(rightArmDistanceFromNeutral),wristDistance:finite(wristDistance),blockCondition,verticalDrop:finite(verticalDrop),lateralShift:finite(lateralShift),shoulderTilt:finite(shoulderTilt),noseDrop:finite(noseDrop),dodgeCondition,leftExtension:finite(leftExtension),rightExtension:finite(rightExtension),rightShoulderX:rs.x,rightShoulderY:rs.y,rightElbowX:re.x,rightElbowY:re.y,rightWristX:rw.x,rightWristY:rw.y,rightHorizontalExtension:finite(rightHorizontalExtension),rightVerticalOffset:finite(rightVerticalOffset),rightElbowHorizontalExtension:finite(rightElbowHorizontalExtension),attackAngle:finite(attackAngle),rightArmSideways,leftWristChestY:finite(leftWristChestY),rightWristChestY:finite(rightWristChestY),strongCross,neutralShoulderCenterY:neutralBaseline?.shoulderCenterY??0,currentShoulderCenterY:shoulderCenterY,verticalShoulderDrop:finite(verticalDrop),neutralNoseY:neutralBaseline?.noseY??0,currentNoseY:visible(nose)?nose.y:0,attackCondition,rawGesture,baselineReady:Boolean(neutralBaseline)};
+  // At long camera distances the wrist can jitter by a significant fraction
+  // of the shoulder width. Combine wrist direction with elbow displacement
+  // and use scale-normalized, deliberately tolerant limits. A resting arm is
+  // still rejected because its vertical offset/angle is much larger.
+  const leftArmSideways=leftExtension>.44&&leftVerticalOffset<.82&&leftAttackAngle<56&&leftElbowHorizontalExtension>.22;
+  const rightArmSideways=rightHorizontalExtension>.44&&rightVerticalOffset<.82&&attackAngle<56&&rightElbowHorizontalExtension>.22;
+  const attackCondition=leftArmSideways||rightArmSideways;
+  // A chest-level X can also satisfy the broad "both arms up" rule. Give the
+  // explicit crossed guard priority so BLOCK remains reliable.
+  const rawGesture=blockCondition?"BLOCK":specialCondition?"SPECIAL":dodgeCondition?"DODGE":attackCondition?"ATTACK":null;
+  return{shoulderWidth,leftShoulderVisibility:visibility(ls),rightShoulderVisibility:visibility(rs),leftElbowVisibility:visibility(le),rightElbowVisibility:visibility(re),leftWristVisibility:visibility(rawLw),rightWristVisibility:visibility(rawRw),leftWristVisible,rightWristVisible,leftArmUp,rightArmUp,leftRaisedAmount:finite(leftRaisedAmount),rightRaisedAmount:finite(rightRaisedAmount),specialCondition,leftWristRaisedForBlock,rightWristRaisedForBlock,leftElbowRaised,rightElbowRaised,leftForearmInward,rightForearmInward,trueCross,leftArmDistanceFromNeutral:finite(leftArmDistanceFromNeutral),rightArmDistanceFromNeutral:finite(rightArmDistanceFromNeutral),wristDistance:finite(wristDistance),blockCondition,verticalDrop:finite(verticalDrop),lateralShift:finite(lateralShift),shoulderTilt:finite(shoulderTilt),noseDrop:finite(noseDrop),dodgeCondition,leftExtension:finite(leftExtension),rightExtension:finite(rightExtension),rightShoulderX:rs.x,rightShoulderY:rs.y,rightElbowX:re.x,rightElbowY:re.y,rightWristX:rw.x,rightWristY:rw.y,rightHorizontalExtension:finite(rightHorizontalExtension),rightVerticalOffset:finite(rightVerticalOffset),rightElbowHorizontalExtension:finite(rightElbowHorizontalExtension),attackAngle:finite(attackAngle),rightArmSideways,leftWristChestY:finite(leftWristChestY),rightWristChestY:finite(rightWristChestY),strongCross,neutralShoulderCenterY:neutralBaseline?.shoulderCenterY??0,currentShoulderCenterY:shoulderCenterY,verticalShoulderDrop:finite(verticalDrop),neutralNoseY:neutralBaseline?.noseY??0,currentNoseY:visible(nose)?nose.y:0,attackCondition,rawGesture,baselineReady:Boolean(neutralBaseline)};
 }
 
-/** The only authoritative gesture decision. Priority is SPECIAL → BLOCK → DODGE → ATTACK. */
+/** The only authoritative gesture decision. Priority is BLOCK → SPECIAL → DODGE → ATTACK. */
 export function detectGesture(landmarks:ReadonlyArray<LandmarkSnapshot>,neutralBaseline:NeutralBaseline|null):ActionLabel|null{
   return getGestureDebug(landmarks,neutralBaseline).rawGesture;
 }
@@ -169,7 +196,7 @@ export class MovementRecognizer{
   addFrame(frame:RecordedFrame,timestamp:number):RecognitionResult{
     const landmarks=frame.bodyLandmarks;
     this.baselineCollector.add(landmarks,timestamp);
-    const required=[landmarks[LEFT_SHOULDER],landmarks[RIGHT_SHOULDER],landmarks[LEFT_ELBOW],landmarks[RIGHT_ELBOW],landmarks[LEFT_WRIST],landmarks[RIGHT_WRIST]].every(visible);
+    const required=[landmarks[LEFT_SHOULDER],landmarks[RIGHT_SHOULDER],landmarks[LEFT_ELBOW],landmarks[RIGHT_ELBOW]].every(visible);
     if(required){this.latestUsable=landmarks;this.latestUsableAt=timestamp}
     const effective=required?landmarks:timestamp-this.latestUsableAt<=POSE_GRACE_MS&&this.latestUsable?this.latestUsable:landmarks;
     const raw=detectGesture(effective,this.baselineCollector.baseline);
@@ -195,6 +222,19 @@ export function runDetectGestureSyntheticTests(){
   const scalePose=(points:LandmarkSnapshot[])=>points.map(point=>({...point,x:center.x+(point.x-center.x)*scale,y:center.y+(point.y-center.y)*scale}));
   const check=(changes:Record<number,[number,number]>)=>detectGesture(makePose(changes),neutral);
   const checkFar=(changes:Record<number,[number,number]>)=>detectGesture(scalePose(makePose(changes)),scaledBaseline);
+  const checkAtScale=(changes:Record<number,[number,number]>,factor:number)=>{
+    const baseline:NeutralBaseline={...neutral,shoulderCenterX:center.x+(neutral.shoulderCenterX-center.x)*factor,shoulderCenterY:center.y+(neutral.shoulderCenterY-center.y)*factor,shoulderWidth:neutral.shoulderWidth*factor,noseY:neutral.noseY===null?null:center.y+(neutral.noseY-center.y)*factor};
+    const points=makePose(changes).map(point=>({...point,x:center.x+(point.x-center.x)*factor,y:center.y+(point.y-center.y)*factor}));
+    return detectGesture(points,baseline);
+  };
+  const shiftFarPose=(points:LandmarkSnapshot[])=>points.map(point=>({...point,x:center.x+(point.x-center.x)*scale,y:.46+(point.y-center.y)*scale}));
+  const checkFarShifted=(changes:Record<number,[number,number]>)=>detectGesture(shiftFarPose(makePose(changes)),scaledBaseline);
+  const checkWithoutHands=(changes:Record<number,[number,number]>)=>{
+    const points=makePose(changes).map(point=>({...point}));
+    points[LEFT_WRIST].visibility=0;
+    points[RIGHT_WRIST].visibility=0;
+    return detectGesture(points,neutral);
+  };
   const attackPose={14:[.72,.43],16:[.84,.44]} as Record<number,[number,number]>;
   const blockPose={13:[.36,.49],14:[.64,.49],15:[.52,.48],16:[.48,.48]} as Record<number,[number,number]>;
   const dodgePose={0:[.5,.28],11:[.4,.46],12:[.6,.46],13:[.38,.58],14:[.62,.58],15:[.38,.75],16:[.62,.75]} as Record<number,[number,number]>;
@@ -202,18 +242,33 @@ export function runDetectGestureSyntheticTests(){
   return{
     bothWristsAboveShoulders:check(specialPose),
     specialFarScale:checkFar(specialPose),
+    specialVeryFarScale:checkAtScale(specialPose,.30),
+    specialCloseScale:checkAtScale(specialPose,1.35),
+    specialWithoutHands:checkWithoutHands({13:[.40,.31],14:[.60,.31],15:[.38,.15],16:[.62,.15]}),
     clearCrossBlock:check(blockPose),
     clearCrossBlockFarScale:checkFar(blockPose),
+    clearCrossBlockFarAndReframed:checkFarShifted(blockPose),
+    clearCrossBlockVeryFarScale:checkAtScale(blockPose,.30),
+    clearCrossBlockCloseScale:checkAtScale(blockPose,1.35),
+    clearCrossBlockWithoutHands:checkWithoutHands({13:[.52,.47],14:[.48,.47],15:[.60,.47],16:[.40,.47]}),
+    highCrossIsBlockNotSpecial:check({13:[.36,.43],14:[.64,.43],15:[.54,.39],16:[.46,.39]}),
+    mirroredCrossBlock:check({11:[.6,.4],12:[.4,.4],13:[.64,.49],14:[.36,.49],15:[.48,.48],16:[.52,.48]}),
     looseCrossBlock:check({13:[.35,.49],14:[.65,.49],15:[.48,.50],16:[.52,.50]}),
     inwardGuardBlock:check({13:[.36,.50],14:[.64,.50],15:[.47,.51],16:[.53,.51]}),
     unevenWristsBlock:check({13:[.36,.48],14:[.64,.51],15:[.52,.46],16:[.48,.52]}),
     unevenElbowsBlock:check({13:[.35,.46],14:[.65,.52],15:[.48,.48],16:[.52,.51]}),
     shouldersLowered:check(dodgePose),
     shouldersLoweredFarScale:checkFar(dodgePose),
+    shouldersLoweredVeryFarScale:checkAtScale(dodgePose,.30),
+    shouldersLoweredCloseScale:checkAtScale(dodgePose,1.35),
+    shouldersLoweredWithoutHands:checkWithoutHands(dodgePose),
     crouchWithRandomArms:check({...dodgePose,13:[.30,.56],14:[.68,.60],15:[.22,.63],16:[.74,.70]}),
     shouldersShiftedSideways:check({0:[.65,.2],11:[.55,.4],12:[.75,.4],13:[.54,.55],14:[.76,.55],15:[.54,.72],16:[.76,.72]}),
     rightArmRawXGreater:check(attackPose),
     rightArmFarScale:checkFar(attackPose),
+    rightArmVeryFarScale:checkAtScale(attackPose,.30),
+    rightArmCloseScale:checkAtScale(attackPose,1.35),
+    rightArmWithoutHand:checkWithoutHands({14:[.73,.43],16:[.88,.44]}),
     rightArmRawXLess:check({14:[.48,.43],16:[.34,.44]}),
     rightArmSlightlyBent:check({14:[.73,.44],16:[.82,.46]}),
     rightArmAboveHorizontal:check({14:[.72,.35],16:[.84,.30]}),

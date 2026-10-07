@@ -80,6 +80,11 @@ button { cursor: pointer; }
   animation:arena-parallax 12s ease-in-out infinite alternate;
 }
 .arena-lights { position: absolute; top: 18px; left: 10%; right: 10%; display: flex; justify-content: space-around; }
+.arena-buildings-near { position:absolute; z-index:-1; inset:auto 2% 34%; height:42%; display:flex; align-items:end; justify-content:space-between; gap:2%; opacity:.82; pointer-events:none; }
+.arena-buildings-near i { width:11%; height:58%; border:2px solid #1e293b; border-bottom:0; background:repeating-linear-gradient(0deg,transparent 0 14px,rgb(103 232 249 / .12) 15px 17px),linear-gradient(90deg,#080e1b,#111b2d 48%,#070b14); box-shadow:inset 8px 0 14px rgb(0 0 0 / .35); clip-path:polygon(0 10%,35% 10%,35% 0,65% 0,65% 10%,100% 10%,100% 100%,0 100%); }
+.arena-buildings-near i:nth-child(2){height:82%;width:9%}.arena-buildings-near i:nth-child(3){height:44%;width:13%}.arena-buildings-near i:nth-child(4){height:92%;width:8%}.arena-buildings-near i:nth-child(5){height:68%;width:12%}.arena-buildings-near i:nth-child(6){height:49%;width:10%}.arena-buildings-near i:nth-child(7){height:78%;width:9%}
+.arena-2 .arena-buildings-near i{background:repeating-linear-gradient(0deg,transparent 0 14px,rgb(251 146 60 / .12) 15px 17px),linear-gradient(90deg,#160b10,#29131a 48%,#10080b)}
+.arena-3 .arena-buildings-near i,.arena-4 .arena-buildings-near i{background:repeating-linear-gradient(0deg,transparent 0 14px,rgb(192 132 252 / .14) 15px 17px),linear-gradient(90deg,#0e0920,#21163b 48%,#090611)}
 .arena-lights i { width: 5px; height: 5px; border-radius: 50%; background: #67e8f9; box-shadow: 0 0 12px 4px #22d3ee; animation: arena-pulse 1.8s ease-in-out infinite alternate; }
 .arena-lights i:nth-child(even) { animation-delay: .5s; }
 .arena-platform {

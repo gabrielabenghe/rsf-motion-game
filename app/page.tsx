@@ -12,7 +12,6 @@ import {
   type ActionTraining,
   type LandmarkSnapshot,
   type RecognitionResult,
-  type RecognitionScores,
   type RecordedFrame,
   type TrainingDiagnostics,
 } from "./movement-recognition";
@@ -25,7 +24,6 @@ import {
   createGameplayData,
   favoriteSequence,
   predictNextAction,
-  runCombatSelfTest,
   type ActionEvent,
   type BattleState,
   type GameplayData,
@@ -46,27 +44,24 @@ const POSE_INTERVAL_MS = PERFORMANCE_MODE ? 33 : 25;
 const HAND_INTERVAL_MS = PERFORMANCE_MODE ? 100 : 80;
 const DEBUG_UPDATE_INTERVAL_MS = PERFORMANCE_MODE ? 250 : 150;
 const RECORDING_DURATION_MS = 1_200;
-const SKELETON_COLOR = "#22d3ee";
-const HAND_SKELETON_COLOR = "#ec4899";
+const SKELETON_COLOR = "#32b2ed";
+const HAND_SKELETON_COLOR = "#ef64aa";
+const SKELETON_JOINT_COLOR = "#0369a1";
+const HAND_JOINT_COLOR = "#be185d";
 const XNNPACK_INFO_MESSAGE =
   "INFO: Created TensorFlow Lite XNNPACK delegate for CPU.";
 const FESTIVAL_MODE = true;
 const DEVELOPMENT_CONTROLS =
   !FESTIVAL_MODE || process.env.NODE_ENV === "development";
 
-const createEmptyRecognitionScores = (): RecognitionScores => ({
-  ATTACK: 0,
-  BLOCK: 0,
-  DODGE: 0,
-  SPECIAL: 0,
-});
-
-const createEmptyDetectionCounts = (): Record<ActionLabel, number> => ({
-  ATTACK: 0,
-  BLOCK: 0,
-  DODGE: 0,
-  SPECIAL: 0,
-});
+const ACTION_LABELS: Record<ActionLabel, string> = { ATTACK: "ATACĂ", BLOCK: "BLOCHEAZĂ", DODGE: "EVITĂ", SPECIAL: "SPECIALĂ" };
+const FEEDBACK_LABELS: Record<string, string> = { "ATTACK!": "ATAC!", "BLOCKED!": "BLOCAT!", "REFLECTED!": "RESPINS!", "DODGED!": "EVITAT!", "HIT!": "LOVIT!", "SPECIAL!": "SPECIALĂ!", "MISS!": "RATAT!", "Incoming attack!": "Atac iminent!" };
+function actionLabel(action: ActionLabel | null | undefined) { return action ? ACTION_LABELS[action] : "NICIUNA"; }
+function feedbackLabel(feedback: BattleState["feedback"]) {
+  if (!feedback) return "";
+  if (feedback.startsWith("SPECIAL CHARGING")) return `SPECIALA SE ÎNCARCĂ — ${Math.round(Number(feedback.match(/[\d.]+/)?.[0] ?? 0))}%`;
+  return FEEDBACK_LABELS[feedback] ?? feedback;
+}
 
 let mediaPipeLoggerLeaseCount = 0;
 let restoreMediaPipeLogger: (() => void) | null = null;
@@ -154,12 +149,6 @@ type PlayerSession = {
   predictionData: Record<string, never>;
 };
 type PlayerProjectile = { id: number; special: boolean };
-type BattleGestureDebug = {
-  raw: ActionLabel | null;
-  emitted: ActionLabel | null;
-  accepted: boolean;
-};
-
 const BODY_REPLAY_CONNECTIONS: ReadonlyArray<readonly [number, number]> = [
   [0, 1],
   [0, 2],
@@ -252,9 +241,11 @@ function getTrackingQuality(landmarks: Array<{ x: number; y: number; visibility?
 function MovePreview({
   recording,
   onBack,
+  onHome,
 }: {
   recording: ActionRecording;
   onBack: () => void;
+  onHome: () => void;
 }) {
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -275,7 +266,7 @@ function MovePreview({
       const isHand = connections === HAND_REPLAY_CONNECTIONS;
       context.strokeStyle = isHand ? HAND_SKELETON_COLOR : SKELETON_COLOR;
       context.fillStyle = isHand ? HAND_SKELETON_COLOR : "#e0f2fe";
-      context.lineWidth = isHand ? 2 : 3;
+      context.lineWidth = isHand ? 3.5 : 4;
 
       for (const [start, end] of connections) {
         const first = landmarks[start];
@@ -290,14 +281,15 @@ function MovePreview({
       }
 
       for (const landmark of landmarks) {
+        const x = landmark.x * canvas.width;
+        const y = landmark.y * canvas.height;
         context.beginPath();
-        context.arc(
-          landmark.x * canvas.width,
-          landmark.y * canvas.height,
-          isHand ? 2.5 : 3,
-          0,
-          Math.PI * 2,
-        );
+        context.arc(x, y, isHand ? 3.2 : 4.2, 0, Math.PI * 2);
+        context.fillStyle = "#ffffff";
+        context.fill();
+        context.beginPath();
+        context.arc(x, y, isHand ? 2.1 : 2.9, 0, Math.PI * 2);
+        context.fillStyle = isHand ? HAND_JOINT_COLOR : SKELETON_JOINT_COLOR;
         context.fill();
       }
     };
@@ -329,8 +321,9 @@ function MovePreview({
 
   return (
     <main className="flex min-h-screen flex-col items-center bg-slate-950 p-8 text-white">
-      <h1 className="text-3xl font-bold">This is what the computer learned</h1>
-      <p className="mt-2 text-cyan-300">{recording.label}</p>
+      <HomeButton onClick={onHome} />
+      <h1 className="text-3xl font-bold">Iată ce a învățat calculatorul</h1>
+      <p className="mt-2 text-cyan-300">{actionLabel(recording.label)}</p>
       <canvas
         ref={previewCanvasRef}
         width={640}
@@ -338,16 +331,29 @@ function MovePreview({
         className="mt-6 w-full max-w-3xl -scale-x-100 rounded-2xl border border-slate-700 bg-black"
       />
       {recording.frames.length === 0 && (
-        <p className="mt-4 text-amber-300">No tracking frames were captured.</p>
+        <p className="mt-4 text-amber-300">Nu au fost înregistrate cadre de urmărire.</p>
       )}
       <button
         type="button"
         onClick={onBack}
         className="mt-6 rounded-lg bg-cyan-500 px-6 py-3 font-semibold text-slate-950"
       >
-        Back to Your Moves
+        ÎNAPOI LA MIȘCĂRILE TALE
       </button>
     </main>
+  );
+}
+
+function HomeButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="fixed left-4 top-4 z-50 rounded-xl border border-cyan-700 bg-slate-950/90 px-4 py-2 text-sm font-black text-cyan-200 shadow-lg backdrop-blur transition hover:border-cyan-400 hover:bg-slate-900"
+      aria-label="Înapoi la pagina principală"
+    >
+      ⌂ ACASĂ
+    </button>
   );
 }
 
@@ -461,24 +467,16 @@ export default function Home() {
   const [currentSession, setCurrentSession] =
     useState<PlayerSession | null>(null);
   const [previewAction, setPreviewAction] = useState<ActionLabel | null>(null);
-  const [recognitionScores, setRecognitionScores] = useState(
-    createEmptyRecognitionScores,
-  );
   const [detectedAction, setDetectedAction] = useState<ActionLabel | null>(null);
   const [flashedAction, setFlashedAction] = useState<ActionLabel | null>(null);
-  const [detectionCounts, setDetectionCounts] = useState(
-    createEmptyDetectionCounts,
-  );
   const [recognitionLatency, setRecognitionLatency] = useState<number | null>(null);
-  const [trackingQuality, setTrackingQuality] =
-    useState<TrackingQuality>("MOVE INTO FRAME");
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [livePrediction, setLivePrediction] = useState<Prediction | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [trackingRetryKey, setTrackingRetryKey] = useState(0);
   const [poseStatus, setPoseStatus] = useState(
-    "Loading pose and hand models...",
+    "Se încarcă modelele pentru corp și mâini...",
   );
   const [selectedAction, setSelectedAction] =
     useState<ActionLabel>("ATTACK");
@@ -501,23 +499,17 @@ export default function Home() {
     debugFps: 0, skippedFrames: 0, delegate: "STARTING",
   });
   const [actionTrace, setActionTrace] = useState("");
-  const [eventLog, setEventLog] = useState<string[]>([]);
   const [playerProjectile, setPlayerProjectile] = useState<PlayerProjectile | null>(null);
   const projectileTimerRef = useRef<number | null>(null);
   const actionLabelTimerRef = useRef<number | null>(null);
   const specialNotReadyTimerRef = useRef<number | null>(null);
   const [visibleActionLabel, setVisibleActionLabel] = useState<ActionLabel | null>(null);
   const [specialNotReady, setSpecialNotReady] = useState(false);
-  const [battleGestureDebug, setBattleGestureDebug] = useState<BattleGestureDebug>({ raw: null, emitted: null, accepted: false });
   const eventLogRef = useRef<string[]>([]);
   const traceEvent = useCallback((label: string) => {
     const next = [...eventLogRef.current, `${(performance.now() / 1000).toFixed(3)} ${label}`].slice(-20);
     eventLogRef.current = next;
-    setEventLog(next);
   }, []);
-  const [combatSelfTest] = useState<ReturnType<typeof runCombatSelfTest> | null>(() =>
-    DEVELOPMENT_CONTROLS ? runCombatSelfTest() : null,
-  );
   const recordings = currentSession?.moves ?? {};
   const readyMoveCount = ACTIONS.length;
 
@@ -582,7 +574,7 @@ export default function Home() {
       const completedRecording = activeRecordingRef.current;
       if (completedRecording) {
         if (!recordingHasEnoughTracking(completedRecording.frames)) {
-          setRecordingIssue("Couldn't see your arms clearly. Try again.");
+          setRecordingIssue("Nu ți-am văzut clar brațele. Încearcă din nou.");
           setCapturePhase("between");
           nextExampleTimerRef.current = window.setTimeout(() => {
             setRecordingIssue("");
@@ -616,7 +608,7 @@ export default function Home() {
                 (_, index) => index !== inconsistentIndex,
               );
             setTeachingExample(inconsistentIndex + 1);
-            setRecordingIssue("That one looked different. Try it again.");
+            setRecordingIssue("Mișcarea a arătat diferit. Încearcă din nou.");
             setCapturePhase("between");
             nextExampleTimerRef.current = window.setTimeout(() => {
               setRecordingIssue("");
@@ -712,7 +704,6 @@ export default function Home() {
     setRecognitionDebug(undefined);
     setActionTrace("");
     eventLogRef.current = [];
-    setEventLog([]);
     setCurrentSession((current) =>
       current ? { ...current, moves: {} } : current,
     );
@@ -762,8 +753,6 @@ export default function Home() {
     setRecognitionDebug(undefined);
     setActionTrace("");
     eventLogRef.current = [];
-    setEventLog([]);
-    setTrackingQuality("MOVE INTO FRAME");
     trackingQualityRef.current = "MOVE INTO FRAME";
     setNicknameInput("");
     setCameraError("");
@@ -791,7 +780,7 @@ export default function Home() {
       gameplayData: createGameplayData(),
       predictionData: {},
     });
-    setPoseStatus("Loading pose and hand models...");
+    setPoseStatus("Se încarcă modelele pentru corp și mâini...");
     setCameraError("");
     movementRecognizerRef.current = new MovementRecognizer();
     movementRecognizerRef.current.resetRuntime();
@@ -810,7 +799,7 @@ export default function Home() {
       recognitionFlashTimerRef.current = null;
     }
     setPreviewAction(null);
-    setPoseStatus("Loading pose and hand models...");
+    setPoseStatus("Se încarcă modelele pentru corp și mâini...");
     setCameraError("");
     setScreen("teach");
   }
@@ -823,12 +812,10 @@ export default function Home() {
     movementRecognizerRef.current ??= new MovementRecognizer();
     movementRecognizerRef.current.resetRuntime();
     recognitionResultRef.current = null;
-    setRecognitionScores(createEmptyRecognitionScores());
     setDetectedAction(null);
     setFlashedAction(null);
-    setDetectionCounts(createEmptyDetectionCounts());
     setRecognitionLatency(null);
-    setPoseStatus("Loading pose and hand models...");
+    setPoseStatus("Se încarcă modelele pentru corp și mâini...");
     setCameraError("");
     setScreen("test");
   }
@@ -841,8 +828,7 @@ export default function Home() {
     setVerificationIndex(0);
     setVerificationMessage("");
     setVerificationComplete(false);
-    setRecognitionScores(createEmptyRecognitionScores());
-    setPoseStatus("Loading pose and hand models...");
+    setPoseStatus("Se încarcă modelele pentru corp și mâini...");
     setScreen("verify");
   }
 
@@ -857,14 +843,12 @@ export default function Home() {
     roundRecordedRef.current = false;
     setBattleState(nextBattle);
     setLivePrediction(predictNextAction(actionHistoryRef.current, battleNumber));
-    setRecognitionScores(createEmptyRecognitionScores());
     setDetectedAction(null);
     setVisibleActionLabel(null);
     if (specialNotReadyTimerRef.current !== null) window.clearTimeout(specialNotReadyTimerRef.current);
     specialNotReadyTimerRef.current = null;
     setSpecialNotReady(false);
-    setBattleGestureDebug({ raw: null, emitted: null, accepted: false });
-    setPoseStatus("Loading pose and hand models...");
+    setPoseStatus("Se încarcă modelele pentru corp și mâini...");
     setCameraError("");
     setScreen("battle");
     playTone(440, 120);
@@ -873,7 +857,6 @@ export default function Home() {
   function dispatchActionEvent(action: ActionLabel, source: "movement" | "keyboard") {
     const state = battleStateRef.current;
     if (!state || state.status !== "playing") {
-      setBattleGestureDebug((current) => ({ ...current, emitted: action, accepted: false }));
       return;
     }
     const now = performance.now();
@@ -883,7 +866,6 @@ export default function Home() {
     const acceptedAction = update.acceptedAction;
     battleStateRef.current = update.state;
     setBattleState(update.state);
-    setBattleGestureDebug((current) => ({ ...current, emitted: action, accepted: acceptedAction !== null }));
     traceEvent(`battle.action ${action}`);
     traceEvent(`result ${update.metric.outcome}`);
     setActionTrace(
@@ -946,10 +928,10 @@ export default function Home() {
             : current.gameplayData.predictions,
           successfulAttacks:
             current.gameplayData.successfulAttacks +
-            (update.metric.outcome === "hit" ? 1 : 0),
+            (update.metric.outcome === "projectile-launched" ? 1 : 0),
           successfulSpecials:
             current.gameplayData.successfulSpecials +
-            (update.metric.outcome === "special-hit" ? 1 : 0),
+            (update.metric.outcome === "special-launched" ? 1 : 0),
         },
       };
     });
@@ -1203,7 +1185,6 @@ export default function Home() {
             const quality = getTrackingQuality(result.landmarks[0] ?? []);
             if (quality !== trackingQualityRef.current) {
               trackingQualityRef.current = quality;
-              setTrackingQuality(quality);
             }
 
             const trackingFrame: RecordedFrame = {
@@ -1234,7 +1215,6 @@ export default function Home() {
               );
               recognitionResultRef.current = recognition;
               if (screen !== "battle" && timestamp - lastDebugUpdateAt >= DEBUG_UPDATE_INTERVAL_MS) {
-                setRecognitionScores(recognition.scores);
                 setRecognitionDebug(recognition.debug);
                 setDetectedAction(recognition.detectedAction);
                 lastDebugUpdateAt = timestamp;
@@ -1242,16 +1222,10 @@ export default function Home() {
               } else if (screen === "test" && recognition.detectedAction !== lastDetectedGesture) {
                 setDetectedAction(recognition.detectedAction);
               }
-              if (screen === "battle" && recognition.detectedAction !== lastDetectedGesture) {
-                setBattleGestureDebug({ raw: recognition.detectedAction, emitted: null, accepted: false });
-              }
               lastDetectedGesture = recognition.detectedAction;
 
               if (recognition.emittedAction) {
                 const emittedAction = recognition.emittedAction;
-                if (screen === "battle") {
-                  setBattleGestureDebug({ raw: recognition.detectedAction, emitted: emittedAction, accepted: false });
-                }
                 traceEvent(`recognition ${emittedAction}`);
                 if (screen === "test" && expectedDebugActionRef.current) {
                   setActionTrace(
@@ -1265,10 +1239,6 @@ export default function Home() {
                 }
                 if (screen === "test") {
                   setRecognitionLatency(recognition.latencyMs);
-                  setDetectionCounts((current) => ({
-                    ...current,
-                    [emittedAction]: current[emittedAction] + 1,
-                  }));
                   setFlashedAction(emittedAction);
                   if (recognitionFlashTimerRef.current !== null) {
                     window.clearTimeout(recognitionFlashTimerRef.current);
@@ -1315,15 +1285,15 @@ export default function Home() {
               drawingUtils.drawConnectors(
                 landmarks,
                 bodyConnections,
-                { color: SKELETON_COLOR, lineWidth: 4 },
+                { color: SKELETON_COLOR, lineWidth: 5 },
               );
               for (const landmark of landmarks.slice(FIRST_BODY_LANDMARK_INDEX)) {
                 const x = landmark.x * canvas.width;
                 const y = landmark.y * canvas.height;
-                context.beginPath(); context.arc(x, y, 4.5, 0, Math.PI * 2);
-                context.fillStyle = "#020617"; context.fill();
-                context.beginPath(); context.arc(x, y, 2.6, 0, Math.PI * 2);
-                context.fillStyle = SKELETON_COLOR; context.fill();
+                context.beginPath(); context.arc(x, y, 5, 0, Math.PI * 2);
+                context.fillStyle = "#ffffff"; context.fill();
+                context.beginPath(); context.arc(x, y, 3.3, 0, Math.PI * 2);
+                context.fillStyle = SKELETON_JOINT_COLOR; context.fill();
               }
             }
 
@@ -1341,15 +1311,15 @@ export default function Home() {
               drawingUtils.drawConnectors(
                 landmarks,
                 HandLandmarker.HAND_CONNECTIONS,
-                { color: HAND_SKELETON_COLOR, lineWidth: 2 },
+                { color: HAND_SKELETON_COLOR, lineWidth: 3.5 },
               );
               for (const landmark of landmarks) {
                 const x = landmark.x * canvas.width;
                 const y = landmark.y * canvas.height;
-                context.beginPath(); context.arc(x, y, 3.6, 0, Math.PI * 2);
-                context.fillStyle = "#22051b"; context.fill();
-                context.beginPath(); context.arc(x, y, 2.1, 0, Math.PI * 2);
-                context.fillStyle = HAND_SKELETON_COLOR; context.fill();
+                context.beginPath(); context.arc(x, y, 4, 0, Math.PI * 2);
+                context.fillStyle = "#ffffff"; context.fill();
+                context.beginPath(); context.arc(x, y, 2.5, 0, Math.PI * 2);
+                context.fillStyle = HAND_JOINT_COLOR; context.fill();
               }
             }
 
@@ -1396,9 +1366,9 @@ export default function Home() {
         }
         if (!isCancelled) {
           if (error instanceof DOMException && error.name === "NotAllowedError") {
-            setCameraError("Camera access is needed to play.");
+            setCameraError("Pentru a juca este necesar accesul la cameră.");
           } else {
-            setPoseStatus("Camera or tracking could not start. Please try again.");
+            setPoseStatus("Camera sau urmărirea nu a putut porni. Încearcă din nou.");
           }
         }
       } finally {
@@ -1591,19 +1561,19 @@ export default function Home() {
   if (screen === "welcome") {
     return (
       <main className="title-screen flex min-h-screen flex-col items-center justify-center p-8 text-center text-white">
-        <p className="mb-4 text-sm font-black tracking-[0.45em] text-cyan-300">YR MOTION // COMBAT PROTOCOL</p>
+        <p className="mb-4 text-sm font-black tracking-[0.45em] text-cyan-300">YR MOTION // PROTOCOL DE LUPTĂ</p>
         <h1 className="title-mark text-6xl font-black">YR MOTION</h1>
-        <p className="mt-3 text-xl font-bold tracking-[0.25em] text-slate-200">YOUR BODY IS THE CONTROLLER.</p>
-        <p className="mt-8 text-xs font-bold tracking-[0.35em] text-emerald-300">MOTION SYSTEM // ONLINE</p>
+        <p className="mt-3 text-xl font-bold tracking-[0.25em] text-slate-200">CORPUL TĂU ESTE CONTROLERUL.</p>
+        <p className="mt-8 text-xs font-bold tracking-[0.35em] text-emerald-300">SISTEM DE MIȘCARE // ACTIV</p>
         <button
           type="button"
           onClick={startNewPlayer}
           className="game-button mt-10 bg-cyan-400 px-10 py-4 text-lg font-black text-slate-950"
         >
-          START NEW GAME
+          JOC NOU
         </button>
         <button type="button" onClick={toggleFullscreen} className="game-button-secondary mt-4 px-5 py-2 text-sm">
-          FULLSCREEN
+          ECRAN COMPLET
         </button>
       </main>
     );
@@ -1612,13 +1582,14 @@ export default function Home() {
   if (screen === "nickname") {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-8 text-white">
+        <HomeButton onClick={resetToHome} />
         <form
           onSubmit={createPlayerSession}
           className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-8"
         >
-          <h1 className="text-3xl font-bold">Who&apos;s playing?</h1>
+          <h1 className="text-3xl font-bold">Cine joacă?</h1>
           <label htmlFor="nickname" className="mt-6 block text-slate-300">
-            First name or nickname
+            Prenume sau poreclă
           </label>
           <input
             id="nickname"
@@ -1634,7 +1605,7 @@ export default function Home() {
             disabled={!nicknameInput.trim()}
             className="mt-6 w-full rounded-lg bg-cyan-500 px-6 py-3 font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            CONTINUE
+            CONTINUĂ
           </button>
         </form>
       </main>
@@ -1643,7 +1614,7 @@ export default function Home() {
 
   if (screen === "preview" && previewRecording) {
     return (
-      <MovePreview recording={previewRecording} onBack={returnToMoveSetup} />
+      <MovePreview recording={previewRecording} onBack={returnToMoveSetup} onHome={resetToHome} />
     );
   }
 
@@ -1651,12 +1622,13 @@ export default function Home() {
     const pair = trainingDiagnostics.similarPairs[0];
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-center text-white">
+        <HomeButton onClick={resetToHome} />
         <section className="w-full max-w-xl rounded-2xl border border-amber-700 bg-slate-900 p-8">
-          <p className="font-bold tracking-widest text-amber-300">MOVES LOOK SIMILAR</p>
+          <p className="font-bold tracking-widest text-amber-300">MIȘCĂRILE SEAMĂNĂ</p>
           <h1 className="mt-4 text-3xl font-black">
-            {pair.first} and {pair.second} look very similar.
+            {actionLabel(pair.first)} și {actionLabel(pair.second)} seamănă foarte mult.
           </h1>
-          <p className="mt-3 text-slate-300">Try making them a little more different.</p>
+          <p className="mt-3 text-slate-300">Încearcă să le faci puțin mai diferite.</p>
           <div className="mt-7 grid gap-3 sm:grid-cols-2">
             {[pair.first, pair.second].map((action) => (
               <button
@@ -1677,7 +1649,7 @@ export default function Home() {
                 }}
                 className="rounded-lg bg-cyan-500 px-5 py-3 font-black text-slate-950"
               >
-                CHANGE {action}
+                SCHIMBĂ {actionLabel(action)}
               </button>
             ))}
           </div>
@@ -1693,7 +1665,7 @@ export default function Home() {
             }}
             className="mt-3 w-full rounded-lg border border-slate-500 px-5 py-3 font-bold"
           >
-            KEEP ANYWAY
+            PĂSTREAZĂ ORICUM
           </button>
         </section>
       </main>
@@ -1704,6 +1676,7 @@ export default function Home() {
     const expectedAction = ACTIONS[verificationIndex];
     return (
       <main className="min-h-screen bg-slate-950 p-5 text-white lg:p-8">
+        <HomeButton onClick={resetToHome} />
         <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-6 lg:grid-cols-[1.6fr_0.9fr]">
           <section>
             <p className="mb-2 text-sm font-bold text-cyan-300">{poseStatus}</p>
@@ -1718,13 +1691,13 @@ export default function Home() {
             </div>
           </section>
           <section className="text-center">
-            <p className="font-bold tracking-[0.25em] text-slate-400">QUICK CHECK</p>
+            <p className="font-bold tracking-[0.25em] text-slate-400">VERIFICARE RAPIDĂ</p>
             <h1 className="mt-3 text-3xl font-black">
               {verificationComplete ? "✓ EȘTI GATA" : ACTION_GUIDES[expectedAction].title}
             </h1>
             <p className="mt-3 text-lg text-slate-300">
               {verificationComplete
-                ? "You know all four controls."
+                ? "Cunoști toate cele patru comenzi."
                 : ACTION_GUIDES[expectedAction].instruction}
             </p>
             {!verificationComplete && (
@@ -1733,83 +1706,14 @@ export default function Home() {
             <div className="mt-7 min-h-20 rounded-xl border border-slate-700 bg-slate-900 p-5 text-xl font-black text-cyan-300">
               {verificationMessage || (recognitionDebug?.baselineReady ? "AȘTEPT POZA..." : "STAI DREPT...")}
             </div>
-            {recognitionDebug && !verificationComplete && (
-              <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border border-cyan-900 bg-slate-900 p-4 text-left font-mono text-xs text-slate-200">
-                <p>SHOULDER WIDTH: {recognitionDebug.shoulderWidth.toFixed(4)}</p>
-                <p>RAW GESTURE: {recognitionDebug.rawGesture ?? "NONE"}</p>
-                <p>LS/RS VISIBILITY: {recognitionDebug.leftShoulderVisibility.toFixed(2)} / {recognitionDebug.rightShoulderVisibility.toFixed(2)}</p>
-                <p>LE/RE VISIBILITY: {recognitionDebug.leftElbowVisibility.toFixed(2)} / {recognitionDebug.rightElbowVisibility.toFixed(2)}</p>
-                <p>LW/RW VISIBILITY: {recognitionDebug.leftWristVisibility.toFixed(2)} / {recognitionDebug.rightWristVisibility.toFixed(2)}</p>
-                <p>LEFT WRIST VISIBLE: {recognitionDebug.leftWristVisible ? "YES" : "NO"}</p>
-                <p>RIGHT WRIST VISIBLE: {recognitionDebug.rightWristVisible ? "YES" : "NO"}</p>
-                <p>LEFT ARM UP: {recognitionDebug.leftArmUp ? "YES" : "NO"}</p>
-                <p>RIGHT ARM UP: {recognitionDebug.rightArmUp ? "YES" : "NO"}</p>
-                <p>LEFT RAISED AMOUNT: {recognitionDebug.leftRaisedAmount.toFixed(2)}</p>
-                <p>RIGHT RAISED AMOUNT: {recognitionDebug.rightRaisedAmount.toFixed(2)}</p>
-                <p>SPECIAL CONDITION: {recognitionDebug.specialCondition ? "YES" : "NO"}</p>
-                <p>LEFT WRIST RAISED FOR BLOCK: {recognitionDebug.leftWristRaisedForBlock ? "YES" : "NO"}</p>
-                <p>RIGHT WRIST RAISED FOR BLOCK: {recognitionDebug.rightWristRaisedForBlock ? "YES" : "NO"}</p>
-                <p>LEFT ELBOW RAISED: {recognitionDebug.leftElbowRaised ? "YES" : "NO"}</p>
-                <p>RIGHT ELBOW RAISED: {recognitionDebug.rightElbowRaised ? "YES" : "NO"}</p>
-                <p>LEFT FOREARM INWARD: {recognitionDebug.leftForearmInward ? "YES" : "NO"}</p>
-                <p>RIGHT FOREARM INWARD: {recognitionDebug.rightForearmInward ? "YES" : "NO"}</p>
-                <p>TRUE CROSS: {recognitionDebug.trueCross ? "YES" : "NO"}</p>
-                <p>STRONG CROSS: {recognitionDebug.strongCross ? "YES" : "NO"}</p>
-                <p>LEFT WRIST CHEST Y: {recognitionDebug.leftWristChestY.toFixed(2)}</p>
-                <p>RIGHT WRIST CHEST Y: {recognitionDebug.rightWristChestY.toFixed(2)}</p>
-                <p>WRIST DISTANCE: {recognitionDebug.wristDistance.toFixed(2)}</p>
-                <p>DISTANCE FROM NEUTRAL LEFT ARM: {recognitionDebug.leftArmDistanceFromNeutral.toFixed(2)}</p>
-                <p>DISTANCE FROM NEUTRAL RIGHT ARM: {recognitionDebug.rightArmDistanceFromNeutral.toFixed(2)}</p>
-                <p>BLOCK CONDITION: {recognitionDebug.blockCondition ? "YES" : "NO"}</p>
-                <p>VERTICAL DROP: {recognitionDebug.verticalDrop.toFixed(2)}</p>
-                <p>NEUTRAL SHOULDER CENTER Y: {recognitionDebug.neutralShoulderCenterY.toFixed(3)}</p>
-                <p>CURRENT SHOULDER CENTER Y: {recognitionDebug.currentShoulderCenterY.toFixed(3)}</p>
-                <p>VERTICAL SHOULDER DROP: {recognitionDebug.verticalShoulderDrop.toFixed(2)}</p>
-                <p>NEUTRAL NOSE Y: {recognitionDebug.neutralNoseY.toFixed(3)}</p>
-                <p>CURRENT NOSE Y: {recognitionDebug.currentNoseY.toFixed(3)}</p>
-                <p>LATERAL SHIFT: {recognitionDebug.lateralShift.toFixed(2)}</p>
-                <p>SHOULDER TILT: {recognitionDebug.shoulderTilt.toFixed(2)}</p>
-                <p>DODGE CONDITION: {recognitionDebug.dodgeCondition ? "YES" : "NO"}</p>
-                <p>LEFT EXTENSION: {recognitionDebug.leftExtension.toFixed(2)}</p>
-                <p>RIGHT EXTENSION: {recognitionDebug.rightExtension.toFixed(2)}</p>
-                <p>RIGHT SHOULDER x/y: {recognitionDebug.rightShoulderX.toFixed(3)} / {recognitionDebug.rightShoulderY.toFixed(3)}</p>
-                <p>RIGHT ELBOW x/y: {recognitionDebug.rightElbowX.toFixed(3)} / {recognitionDebug.rightElbowY.toFixed(3)}</p>
-                <p>RIGHT WRIST x/y: {recognitionDebug.rightWristX.toFixed(3)} / {recognitionDebug.rightWristY.toFixed(3)}</p>
-                <p>RIGHT HORIZONTAL EXTENSION: {recognitionDebug.rightHorizontalExtension.toFixed(2)}</p>
-                <p>RIGHT VERTICAL OFFSET: {recognitionDebug.rightVerticalOffset.toFixed(2)}</p>
-                <p>RIGHT ELBOW HORIZONTAL EXTENSION: {recognitionDebug.rightElbowHorizontalExtension.toFixed(2)}</p>
-                <p>ATTACK ANGLE: {recognitionDebug.attackAngle.toFixed(1)}°</p>
-                <p>RIGHT ARM SIDEWAYS: {recognitionDebug.rightArmSideways ? "YES" : "NO"}</p>
-                <p>ATTACK CONDITION: {recognitionDebug.attackCondition ? "YES" : "NO"}</p>
-                <p className="font-black text-cyan-300">RAW GESTURE: {recognitionDebug.rawGesture ?? "NONE"}</p>
-              </div>
-            )}
-            {DEVELOPMENT_CONTROLS && trainingDiagnostics && (
-              <div className="mt-4 rounded-lg border border-slate-700 bg-slate-900 p-3 text-left text-xs text-slate-300">
-                <p className="font-bold text-cyan-300">Training self-check</p>
-                {ACTIONS.map((action) => {
-                  const diagnostic = trainingDiagnostics.actions[action];
-                  return (
-                    <p key={action} className="mt-1">
-                      {action}: {diagnostic.leaveOneOutCorrect}/{diagnostic.leaveOneOutTotal} · self {Math.round(diagnostic.selfSimilarity)}% · closest {diagnostic.closestAction} · {diagnostic.separation}
-                    </p>
-                  );
-                })}
-                {!verificationComplete && (
-                  <p className="mt-2 text-slate-400">
-                    Live: {ACTIONS.map((action) => `${action} ${Math.round(recognitionScores[action])}`).join(" · ")}
-                  </p>
-                )}
-              </div>
-            )}
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               {verificationComplete && (
                 <button type="button" onClick={() => startBattle(1)} className="rounded-lg bg-cyan-500 px-7 py-3 font-black text-slate-950">
-                  START BATTLE
+                  ÎNCEPE LUPTA
                 </button>
               )}
               <button type="button" onClick={() => startBattle(1)} className="rounded-lg border border-slate-500 px-6 py-3 font-bold">
-                SKIP TUTORIAL
+                SARI PESTE TUTORIAL
               </button>
             </div>
           </section>
@@ -1821,17 +1725,18 @@ export default function Home() {
   if (screen === "test") {
     return (
       <main className="min-h-screen bg-slate-950 p-5 text-white lg:p-8">
+        <HomeButton onClick={resetToHome} />
         <header className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">TEST MY MOVES</h1>
+            <h1 className="text-3xl font-bold">TESTEAZĂ-MI MIȘCĂRILE</h1>
             <p className="text-slate-300">
-              Try any of your four moves, in any order.
+              Încearcă oricare dintre cele patru mișcări, în orice ordine.
             </p>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={toggleSound} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">{isMuted ? "SOUND OFF" : "SOUND ON"}</button>
-            <button type="button" onClick={toggleFullscreen} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">FULLSCREEN</button>
-            <button type="button" onClick={returnToMoveSetup} className="rounded-lg border border-slate-600 px-4 py-2">BACK TO MOVES</button>
+            <button type="button" onClick={toggleSound} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">{isMuted ? "SUNET OPRIT" : "SUNET PORNIT"}</button>
+            <button type="button" onClick={toggleFullscreen} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">ECRAN COMPLET</button>
+            <button type="button" onClick={returnToMoveSetup} className="rounded-lg border border-slate-600 px-4 py-2">ÎNAPOI LA MIȘCĂRI</button>
           </div>
         </header>
 
@@ -1857,50 +1762,29 @@ export default function Home() {
             {cameraError && (
               <div className="mt-3 flex items-center gap-3 text-red-400">
                 <p>{cameraError}</p>
-                <button type="button" onClick={() => setTrackingRetryKey((value) => value + 1)} className="rounded border border-red-500 px-3 py-1 text-sm">TRY AGAIN</button>
+                <button type="button" onClick={() => setTrackingRetryKey((value) => value + 1)} className="rounded border border-red-500 px-3 py-1 text-sm">ÎNCEARCĂ DIN NOU</button>
               </div>
             )}
           </section>
 
           <section className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
-            <h2 className="text-2xl font-bold">YOUR MOVE</h2>
+            <h2 className="text-2xl font-bold">MIȘCAREA TA</h2>
             <p className="mt-1 text-xs text-slate-400">
               Move freely — the game is listening.
             </p>
 
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              {ACTIONS.map((action) => (
-                <div
-                  key={action}
-                  className={`rounded-lg border p-2 transition-colors ${
-                    flashedAction === action
-                      ? "border-emerald-300 bg-emerald-900"
-                      : "border-slate-700 bg-slate-800"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm">{action}</span>
-                    {DEVELOPMENT_CONTROLS && <span className="font-mono text-xs text-cyan-300">{recognitionScores[action].toFixed(0)}</span>}
-                  </div>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Emitted: {detectionCounts[action]}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 rounded-xl border border-cyan-800 bg-slate-950 p-5 text-center">
-              <p className="text-sm text-slate-400">Detected</p>
+            <div className={`mt-6 rounded-xl border bg-slate-950 p-7 text-center transition-colors ${flashedAction ? "border-emerald-400" : "border-cyan-800"}`}>
+              <p className="text-sm font-bold tracking-widest text-slate-400">MIȘCARE DETECTATĂ</p>
               <p className="mt-1 text-6xl font-black italic text-cyan-300">
-                {detectedAction ?? "NONE"}
+                {actionLabel(detectedAction)}
               </p>
               <p className="mt-3 text-sm text-slate-400">
-                Recognition latency: {recognitionLatency === null ? "—" : `${Math.round(recognitionLatency)} ms`}
+                Timp de recunoaștere: {recognitionLatency === null ? "—" : `${Math.round(recognitionLatency)} ms`}
               </p>
             </div>
             <div className="mt-4 flex gap-2">
               <button type="button" onClick={() => startBattle(1)} className="flex-1 rounded-lg bg-emerald-500 px-4 py-3 font-black text-slate-950">
-                START BATTLE
+                ÎNCEPE LUPTA
               </button>
               {DEVELOPMENT_CONTROLS && <button type="button" onClick={startQuickCheck} className="rounded-lg border border-slate-600 px-3 py-2 text-xs">QUICK CHECK</button>}
             </div>
@@ -1955,22 +1839,23 @@ export default function Home() {
     const reflectedProjectile = battleState.projectiles.find((projectile) => projectile.owner === "PLAYER" && projectile.reflected);
     return (
       <main className="min-h-screen overflow-hidden bg-slate-950 p-4 text-white lg:p-6">
+        <HomeButton onClick={resetToHome} />
         <header className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div>
             <p className="text-sm font-bold tracking-widest text-cyan-300">
-              BATTLE {battleState.battleNumber} / 4
+              LUPTA {battleState.battleNumber} / 4
             </p>
             <h1 className="text-2xl font-black lg:text-3xl">
-              {currentSession?.player.nickname} VS {opponent.name}
+              {currentSession?.player.nickname} CONTRA {opponent.name}
             </h1>
             <p className="text-sm text-slate-400">{opponent.subtitle}</p>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={toggleSound} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">
-              {isMuted ? "SOUND OFF" : "SOUND ON"}
+              {isMuted ? "SUNET OPRIT" : "SUNET PORNIT"}
             </button>
             <button type="button" onClick={toggleFullscreen} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">
-              FULLSCREEN
+              ECRAN COMPLET
             </button>
           </div>
         </header>
@@ -1988,6 +1873,7 @@ export default function Home() {
               <div className="arena-rigging"><i/><i/><i/></div>
               <div className="arena-crowd"><i/><i/><i/><i/><i/><i/></div>
               <div className="arena-skyline" />
+              <div className="arena-buildings-near" aria-hidden="true"><i/><i/><i/><i/><i/><i/><i/></div>
               <div className="arena-haze arena-haze-back" />
               <div className="arena-lights"><i /><i /><i /><i /><i /></div>
               <div className="arena-banners"><i>YR</i><i>MOTION</i></div>
@@ -1996,7 +1882,7 @@ export default function Home() {
               <div className="arena-floor-sheen" />
               <div className="arena-foreground" />
               <div className="arena-vignette" />
-              <div key={`round-${battleState.battleNumber}`} className="round-intro" aria-hidden="true"><span>ROUND {battleState.battleNumber}</span><b>FIGHT</b></div>
+              <div key={`round-${battleState.battleNumber}`} className="round-intro" aria-hidden="true"><span>RUNDA {battleState.battleNumber}</span><b>LUPTĂ</b></div>
               {battleState.opponentAttackAt !== null && <div className={`enemy-charge enemy-charge-${battleState.battleNumber}`} />}
               {enemyProjectile && (
                 <div
@@ -2024,29 +1910,29 @@ export default function Home() {
               {battleState.status !== "playing" && <div className={`finish-dust ${battleState.status === "won" ? "finish-dust-right" : "finish-dust-left"}`}><i/><i/><i/><i/><i/></div>}
               <Fighter key={`player-${battleState.animationVersion}`} name={currentSession?.player.nickname ?? "PLAYER"} side="player" animation={battleState.playerAnimation} combatFeedback={battleState.feedback} />
               <div className="absolute left-1/2 top-5 -translate-x-1/2 text-center">
-                {visibleActionLabel && <p key={`callout-${battleState.animationVersion}`} className="recognized-callout">{visibleActionLabel}!</p>}
-                <p className="combat-feedback">{battleState.feedback}</p>
+                {visibleActionLabel && <p key={`callout-${battleState.animationVersion}`} className="recognized-callout">{actionLabel(visibleActionLabel)}!</p>}
+                <p className="combat-feedback">{feedbackLabel(battleState.feedback)}</p>
                 {battleState.opponentAttackAt !== null && (
-                  <p className="mt-2 animate-pulse font-bold text-red-400">INCOMING ATTACK — BLOCK OR DODGE!</p>
+                  <p className="mt-2 animate-pulse font-bold text-red-400">ATAC IMINENT — BLOCHEAZĂ SAU EVITĂ!</p>
                 )}
               </div>
               {battleState.battleNumber === 4 && (gameplay?.actions.length ?? 0) >= 8 && livePrediction && livePrediction.confidence >= 0.36 && (
-                <p className="analysis-tag">{livePrediction.confidence >= 0.48 ? "PATTERN FOUND" : "ANALYZING..."}</p>
+                <p className="analysis-tag">{livePrediction.confidence >= 0.48 ? "TIPAR GĂSIT" : "SE ANALIZEAZĂ..."}</p>
               )}
               <Fighter key={`opponent-${battleState.animationVersion}`} name={opponent.name} side="opponent" animation={battleState.opponentAnimation} opponentNumber={battleState.battleNumber} />
             </div>
 
             <div className={`special-meter mt-4 ${specialNotReady ? "special-meter-not-ready" : ""}`}>
               <div className="flex items-center justify-between text-sm font-bold">
-                <span>SPECIAL ENERGY</span>
+                <span>ENERGIE SPECIALĂ</span>
                 <span className={battleState.specialEnergy >= 100 ? "animate-pulse text-amber-300" : "text-cyan-300"}>
-                  {battleState.specialEnergy >= 100 ? "SPECIAL READY!" : `${battleState.specialEnergy}%`}
+                  {battleState.specialEnergy >= 100 ? "SPECIALA ESTE GATA!" : `${Math.round(battleState.specialEnergy)}%`}
                 </span>
               </div>
               <div className="special-meter-track mt-2 h-4 overflow-hidden rounded-full bg-slate-800">
                 <div className="special-meter-fill h-full bg-amber-400 transition-[width] duration-200" style={{ width: `${battleState.specialEnergy}%` }} />
               </div>
-              {specialNotReady && <p className="special-not-ready-text">SPECIAL NOT READY</p>}
+              {specialNotReady && <p className="special-not-ready-text">SPECIALA NU ESTE GATA</p>}
             </div>
           </section>
 
@@ -2056,48 +1942,20 @@ export default function Home() {
                 <video ref={videoRef} autoPlay playsInline muted className="block w-full -scale-x-100" />
                 <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100" aria-hidden="true" />
               </div>
-              <p className="bg-slate-900 px-3 py-2 text-center text-xs font-bold text-cyan-300">TRACKING: {trackingQuality}</p>
             </div>
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-center">
-              <p className="text-xs text-slate-400">YOUR LAST MOVE</p>
-              <p className="mt-1 text-2xl font-black text-cyan-300">{visibleActionLabel ?? "MOVE!"}</p>
+              <p className="text-xs text-slate-400">ULTIMA TA MIȘCARE</p>
+              <p className="mt-1 text-2xl font-black text-cyan-300">{visibleActionLabel ? actionLabel(visibleActionLabel) : "MIȘCĂ-TE!"}</p>
             </div>
             {battleState.battleNumber >= 3 && livePrediction && (
               <div className="rounded-xl border border-slate-700 bg-slate-900 p-3">
-                <p className="text-xs font-bold text-slate-400">THE AI IS LEARNING</p>
+                <p className="text-xs font-bold text-slate-400">AI-UL ÎNVAȚĂ</p>
                 {ACTIONS.map((action) => (
                   <div key={action} className="mt-1 flex justify-between text-xs">
-                    <span>{action}</span>
+                    <span>{actionLabel(action)}</span>
                     <span>{Math.round(livePrediction.probabilities[action] * 100)}%</span>
                   </div>
                 ))}
-              </div>
-            )}
-            {DEVELOPMENT_CONTROLS && (
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-500">
-                <p className="text-center">Dev keys: A attack · B block · D dodge · S special</p>
-                <div className="mt-2 space-y-1 font-mono text-[10px]">
-                  <p>RAW DETECTED GESTURE: {battleGestureDebug.raw ?? "NONE"}</p>
-                  <p>ACTION EVENT EMITTED: {battleGestureDebug.emitted ?? "NONE"}</p>
-                  <p>ACTION EVENT ACCEPTED: {battleGestureDebug.accepted ? "YES" : "NO"}</p>
-                  <p>CURRENT CHARACTER ACTION: {battleState.playerAnimation}</p>
-                  <p>VISIBLE ACTION LABEL: {visibleActionLabel ?? "NONE"}</p>
-                </div>
-                {recognitionDebug && (
-                  <p className="mt-2 text-center font-mono">
-                    {recognitionDebug.decision} · {recognitionDebug.reason} · {actionTrace}
-                  </p>
-                )}
-                {combatSelfTest && (
-                  <p className="mt-2 text-center font-mono text-emerald-400">
-                    Combat self-test: {combatSelfTest.passed ? "PASS" : "FAIL"}
-                  </p>
-                )}
-                {eventLog.length > 0 && (
-                  <div className="mt-2 max-h-24 overflow-hidden font-mono text-[10px] text-slate-400">
-                    {eventLog.map((entry) => <div key={entry}>{entry}</div>)}
-                  </div>
-                )}
               </div>
             )}
           </aside>
@@ -2110,19 +1968,20 @@ export default function Home() {
     const isFinal = battleState.battleNumber === 4;
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-8 text-center text-white">
-        <p className="font-bold tracking-widest text-cyan-300">BATTLE {battleState.battleNumber} COMPLETE</p>
-        <h1 className="mt-3 text-5xl font-black">{battleState.status === "won" ? "OPPONENT DEFEATED!" : "GOOD TRY!"}</h1>
+        <HomeButton onClick={resetToHome} />
+        <p className="font-bold tracking-widest text-cyan-300">LUPTA {battleState.battleNumber} S-A ÎNCHEIAT</p>
+        <h1 className="mt-3 text-5xl font-black">{battleState.status === "won" ? "ADVERSAR ÎNVINS!" : "BUNĂ ÎNCERCARE!"}</h1>
         <p className="mt-3 text-lg text-slate-300">
-          {battleState.status === "won" ? "Your moves were stronger." : "Every battle teaches the AI more."}
+          {battleState.status === "won" ? "Mișcările tale au fost mai puternice." : "Fiecare luptă învață AI-ul mai multe."}
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <button type="button" onClick={() => startBattle(battleState.battleNumber)} className="rounded-xl border border-slate-500 px-6 py-3 font-bold">RETRY</button>
+          <button type="button" onClick={() => startBattle(battleState.battleNumber)} className="rounded-xl border border-slate-500 px-6 py-3 font-bold">REÎNCEARCĂ</button>
           <button
             type="button"
             onClick={() => (isFinal ? setScreen("results") : startBattle(battleState.battleNumber + 1))}
             className="rounded-xl bg-cyan-500 px-8 py-3 font-black text-slate-950"
           >
-            {isFinal ? "SEE RESULTS" : "NEXT BATTLE"}
+            {isFinal ? "VEZI REZULTATELE" : "LUPTA URMĂTOARE"}
           </button>
         </div>
       </main>
@@ -2132,29 +1991,30 @@ export default function Home() {
   if (screen === "results" && currentSession && gameplay) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 p-5 text-white">
+        <HomeButton onClick={resetToHome} />
         <section className="w-full max-w-4xl rounded-2xl border border-slate-700 bg-slate-900 p-6 lg:p-9">
-          <p className="font-bold tracking-widest text-cyan-300">SESSION COMPLETE</p>
-          <h1 className="mt-2 text-4xl font-black lg:text-5xl">WHAT THE AI LEARNED ABOUT {currentSession.player.nickname.toUpperCase()}</h1>
+          <p className="font-bold tracking-widest text-cyan-300">SESIUNE ÎNCHEIATĂ</p>
+          <h1 className="mt-2 text-4xl font-black lg:text-5xl">CE A ÎNVĂȚAT AI-UL DESPRE {currentSession.player.nickname.toUpperCase()}</h1>
           <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <ResultStat label="Actions observed" value={String(gameplay.actions.length)} />
-            <ResultStat label="Most used move" value={mostUsedMove && mostUsedMove.count > 0 ? mostUsedMove.action : "Not enough data"} />
-            <ResultStat label="Favorite sequence" value={favorite ? favorite[0] : "Not enough data"} />
-            <ResultStat label="AI prediction accuracy" value={predictionAccuracy === null ? "Not enough data" : `${Math.round(predictionAccuracy)}%`} />
+            <ResultStat label="Acțiuni observate" value={String(gameplay.actions.length)} />
+            <ResultStat label="Cea mai folosită mișcare" value={mostUsedMove && mostUsedMove.count > 0 ? actionLabel(mostUsedMove.action) : "Date insuficiente"} />
+            <ResultStat label="Secvența preferată" value={favorite ? favorite[0] : "Date insuficiente"} />
+            <ResultStat label="Precizia predicțiilor AI" value={predictionAccuracy === null ? "Date insuficiente" : `${Math.round(predictionAccuracy)}%`} />
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl bg-slate-950 p-5">
-              <h2 className="font-black text-slate-400">AT THE START</h2>
-              <p className="mt-2 text-lg">The opponent did not know your playstyle.</p>
+              <h2 className="font-black text-slate-400">LA ÎNCEPUT</h2>
+              <p className="mt-2 text-lg">Adversarul nu îți cunoștea stilul de joc.</p>
             </div>
             <div className="rounded-xl border border-cyan-800 bg-slate-950 p-5">
-              <h2 className="font-black text-cyan-300">BY THE FINAL BATTLE</h2>
-              <p className="mt-2 text-lg">It used your action patterns to anticipate what you might do next.</p>
+              <h2 className="font-black text-cyan-300">PÂNĂ LA LUPTA FINALĂ</h2>
+              <p className="mt-2 text-lg">A folosit tiparele acțiunilor tale pentru a anticipa următoarea mișcare.</p>
             </div>
           </div>
-          <p className="mt-5 text-center text-sm text-slate-400">
-            Successful attacks: {gameplay.successfulAttacks} · blocks: {gameplay.successfulBlocks} · dodges: {gameplay.successfulDodges} · specials: {gameplay.successfulSpecials}
+          <p className="mt-5 text-center text-base font-semibold text-cyan-200">
+            Ai luptat grozav! Fiecare mișcare a făcut această aventură numai a ta. ✨
           </p>
-          <button type="button" onClick={resetToHome} className="mt-7 w-full rounded-xl bg-cyan-500 px-8 py-4 text-xl font-black text-slate-950">NEXT PLAYER</button>
+          <button type="button" onClick={resetToHome} className="mt-7 w-full rounded-xl bg-cyan-500 px-8 py-4 text-xl font-black text-slate-950">JUCĂTORUL URMĂTOR</button>
         </section>
       </main>
     );
@@ -2162,17 +2022,18 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-950 p-5 text-white lg:p-8">
+      <HomeButton onClick={resetToHome} />
       <header className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">YR Motion Game</h1>
           <p className="text-slate-300">
-            {currentSession?.player.nickname}, teach us your moves.
+            {currentSession?.player.nickname}, arată-ne mișcările tale.
           </p>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={toggleSound} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">{isMuted ? "SOUND OFF" : "SOUND ON"}</button>
-          <button type="button" onClick={toggleFullscreen} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">FULLSCREEN</button>
-          <button type="button" onClick={resetToHome} className="rounded-lg border border-slate-600 px-4 py-2 text-sm">New Player</button>
+          <button type="button" onClick={toggleSound} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">{isMuted ? "SUNET OPRIT" : "SUNET PORNIT"}</button>
+          <button type="button" onClick={toggleFullscreen} className="rounded-lg border border-slate-600 px-3 py-2 text-sm">ECRAN COMPLET</button>
+          <button type="button" onClick={resetToHome} className="rounded-lg border border-slate-600 px-4 py-2 text-sm">JUCĂTOR NOU</button>
         </div>
       </header>
 
@@ -2200,21 +2061,21 @@ export default function Home() {
                 {capturePhase === "countdown" ? (
                   <div>
                     <p className="text-2xl font-bold">
-                      Teach your {selectedAction}
+                      Arată mișcarea {actionLabel(selectedAction)}
                     </p>
                     <p className="mt-1 text-lg">
-                    Example {teachingExample} of 1
+                    Exemplul {teachingExample} din 1
                     </p>
-                    <p className="mt-2 text-xl">Get ready...</p>
+                    <p className="mt-2 text-xl">Pregătește-te...</p>
                     <p className="mt-2 text-7xl font-black text-amber-300">
                       {countdown}
                     </p>
                   </div>
                 ) : capturePhase === "recording" ? (
                   <div>
-                    <p className="text-7xl font-black text-red-400">MOVE!</p>
+                    <p className="text-7xl font-black text-red-400">MIȘCĂ-TE!</p>
                     <p className="mt-3 text-2xl font-bold">
-                      Recording {selectedAction} — Example {teachingExample} of 1
+                      Se înregistrează {actionLabel(selectedAction)} — exemplul {teachingExample} din 1
                     </p>
                   </div>
                 ) : (
@@ -2224,7 +2085,7 @@ export default function Home() {
                     </p>
                     {!recordingIssue && (
                       <p className="mt-3 text-2xl font-bold">
-                        Example {teachingExample} complete
+                        Exemplul {teachingExample} este gata
                       </p>
                     )}
                   </div>
@@ -2235,30 +2096,30 @@ export default function Home() {
           {cameraError && (
             <div className="mt-3 flex items-center gap-3 text-red-400">
               <p>{cameraError}</p>
-              <button type="button" onClick={() => setTrackingRetryKey((value) => value + 1)} className="rounded border border-red-500 px-3 py-1 text-sm">TRY AGAIN</button>
+              <button type="button" onClick={() => setTrackingRetryKey((value) => value + 1)} className="rounded border border-red-500 px-3 py-1 text-sm">ÎNCEARCĂ DIN NOU</button>
             </div>
           )}
         </section>
 
         <section className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
-          <h2 className="text-2xl font-bold">YOUR MOVES</h2>
+          <h2 className="text-2xl font-bold">MIȘCĂRILE TALE</h2>
           <p className="mt-1 font-semibold text-cyan-300">
-            {readyMoveCount} / 4 MOVES READY
+            {readyMoveCount} / 4 MIȘCĂRI GATA
           </p>
           {DEVELOPMENT_CONTROLS && !similarityAccepted && trainingDiagnostics?.similarPairs[0] && (
             <div className="mt-3 rounded-lg border border-amber-700 bg-amber-950/40 p-3 text-xs text-amber-200">
               <p className="font-bold">
-                {trainingDiagnostics.similarPairs[0].first} and{" "}
-                {trainingDiagnostics.similarPairs[0].second} may be hard to tell apart.
+                {actionLabel(trainingDiagnostics.similarPairs[0].first)} și{" "}
+                {actionLabel(trainingDiagnostics.similarPairs[0].second)} pot fi greu de diferențiat.
               </p>
               <div className="mt-2 flex gap-2">
                 {[trainingDiagnostics.similarPairs[0].first, trainingDiagnostics.similarPairs[0].second].map((action) => (
                   <button key={action} type="button" onClick={() => startTeaching(action)} className="rounded border border-amber-500 px-2 py-1 font-bold">
-                    CHANGE {action}
+                    SCHIMBĂ {actionLabel(action)}
                   </button>
                 ))}
                 <button type="button" onClick={() => setSimilarityAccepted(true)} className="rounded border border-slate-500 px-2 py-1 font-bold">
-                  KEEP ANYWAY
+                  PĂSTREAZĂ ORICUM
                 </button>
               </div>
             </div>
@@ -2273,13 +2134,13 @@ export default function Home() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="font-bold">{action}</h3>
+                      <h3 className="font-bold">{actionLabel(action)}</h3>
                       <p
                         className={
                           recording ? "text-emerald-400" : "text-slate-400"
                         }
                       >
-                        {recording ? "✓ Learned" : "Not learned"}
+                        {recording ? "✓ Învățată" : "Neînvățată"}
                       </p>
                     </div>
 
@@ -2294,7 +2155,7 @@ export default function Home() {
                           disabled={capturePhase !== "idle"}
                           className="rounded-md border border-slate-500 px-3 py-2 text-sm font-semibold disabled:opacity-50"
                         >
-                          VIEW
+                          VEZI
                         </button>
                         <button
                           type="button"
@@ -2302,7 +2163,7 @@ export default function Home() {
                           disabled={capturePhase !== "idle"}
                           className="rounded-md bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
                         >
-                          CHANGE
+                          SCHIMBĂ
                         </button>
                       </div>
                     ) : (
@@ -2312,7 +2173,7 @@ export default function Home() {
                         disabled={capturePhase !== "idle"}
                         className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
                       >
-                        TEACH
+                        ÎNVAȚĂ
                       </button>
                     )}
                   </div>
@@ -2327,7 +2188,7 @@ export default function Home() {
             disabled={readyMoveCount !== ACTIONS.length}
             className="mt-5 w-full rounded-lg bg-cyan-500 px-5 py-3 font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            TEST MY MOVES
+            TESTEAZĂ-MI MIȘCĂRILE
           </button>
           <button
             type="button"
@@ -2335,7 +2196,7 @@ export default function Home() {
             disabled={readyMoveCount !== ACTIONS.length}
             className="mt-2 w-full rounded-lg border border-cyan-700 px-5 py-2 text-sm font-bold text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            QUICK CHECK (OPTIONAL)
+            VERIFICARE RAPIDĂ (OPȚIONAL)
           </button>
           <button
             type="button"
@@ -2343,7 +2204,7 @@ export default function Home() {
             disabled={readyMoveCount !== ACTIONS.length}
             className="mt-2 w-full rounded-lg bg-emerald-500 px-5 py-3 font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            START BATTLE
+            ÎNCEPE LUPTA
           </button>
           <button
             type="button"
@@ -2353,7 +2214,7 @@ export default function Home() {
             }
             className="mt-2 w-full rounded-lg border border-slate-600 px-5 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Reset Moves
+            RESETEAZĂ MIȘCĂRILE
           </button>
         </section>
       </div>
